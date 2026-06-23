@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <title>Screen · Cam Merge</title>
+  <style>
+    :root {
+      --bg:      #d6d3ca;   /* warm taupe */
+      --panel:   #e7e4dc;   /* card */
+      --panel-2: #efece5;   /* lighter card */
+      --ink:     #14130d;   /* near-black */
+      --muted:   #9a978d;   /* grey text */
+      --line:    #c7c3b8;   /* hairlines / inactive track */
+      --accent:  #f2c500;   /* signal yellow */
+      --rec:     #e5484d;   /* record red */
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ---------- Sidebar ---------- */
+    .sidebar {
+      width: 340px;
+      flex-shrink: 0;
+      padding: 22px 18px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      overflow-y: auto;
+      background: var(--bg);
+    }
+    .brand {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 11px; font-weight: 700; letter-spacing: .14em;
+      text-transform: uppercase; color: var(--muted);
+    }
+    .brand .chip { width: 9px; height: 9px; border-radius: 50%; background: var(--rec); }
+    h1 {
+      margin: 2px 0 6px;
+      font-size: 34px; font-weight: 800; line-height: .98; letter-spacing: -.02em;
+    }
+    h1 .sub { display: block; color: var(--muted); }
+
+    .card {
+      background: var(--panel);
+      border-radius: 20px;
+      padding: 16px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .card.tight { gap: 10px; }
+    label.lbl {
+      font-size: 10px; font-weight: 700; letter-spacing: .12em;
+      text-transform: uppercase; color: var(--muted);
+      display: flex; justify-content: space-between; align-items: baseline;
+    }
+    .val { font-size: 12px; color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: 0; }
+    .hint { font-size: 11px; color: var(--muted); font-weight: 500; letter-spacing: 0; text-transform: none; }
+
+    /* selects */
+    select {
+      appearance: none; -webkit-appearance: none;
+      width: 100%;
+      background: var(--panel-2);
+      color: var(--ink);
+      border: none;
+      border-radius: 13px;
+      padding: 12px 14px;
+      font-size: 13px; font-weight: 600;
+      cursor: pointer;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2314130d' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 14px center;
+    }
+
+    /* segmented position */
+    .seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+    .seg button {
+      background: var(--panel-2);
+      color: var(--muted);
+      border: none;
+      border-radius: 11px;
+      padding: 10px 4px;
+      font-size: 11px; font-weight: 700;
+      cursor: pointer;
+      transition: all .15s ease;
+    }
+    .seg button:hover { background: var(--line); color: var(--ink); }
+    .seg button.active { background: var(--ink); color: #fff; }
+    .seg button.active:hover { background: #000; }
+
+    /* range sliders */
+    input[type=range] {
+      -webkit-appearance: none; appearance: none;
+      width: 100%; height: 6px; border-radius: 99px;
+      background: var(--line); cursor: pointer; margin: 6px 0;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%;
+      background: var(--ink); border: 4px solid var(--panel);
+      box-shadow: 0 1px 4px rgba(0,0,0,.35);
+    }
+
+    /* pill toggles */
+    .toggle {
+      display: flex; align-items: center; justify-content: space-between;
+      cursor: pointer; gap: 12px;
+    }
+    .toggle span { font-size: 13px; font-weight: 600; }
+    input[type=checkbox] {
+      -webkit-appearance: none; appearance: none;
+      width: 46px; height: 27px; border-radius: 99px;
+      background: var(--line); position: relative; cursor: pointer;
+      transition: background .2s ease; flex-shrink: 0;
+    }
+    input[type=checkbox]::after {
+      content: ''; position: absolute; top: 3px; left: 3px;
+      width: 21px; height: 21px; border-radius: 50%; background: #fff;
+      box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform .2s ease;
+    }
+    input[type=checkbox]:checked { background: var(--ink); }
+    input[type=checkbox]:checked::after { transform: translateX(19px); }
+
+    /* transport */
+    .transport { margin-top: auto; display: flex; flex-direction: column; gap: 14px; align-items: stretch; }
+    .dial-row { display: flex; gap: 14px; }
+    .dial {
+      flex: 1; aspect-ratio: 1 / 1; border-radius: 50%;
+      border: none; cursor: pointer; position: relative;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 6px;
+      font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+      transition: transform .12s ease, box-shadow .2s ease;
+      box-shadow: 0 6px 18px rgba(0,0,0,.18);
+    }
+    .dial:hover { box-shadow: 0 9px 24px rgba(0,0,0,.26); transform: translateY(-1px); }
+    .dial:active { transform: scale(.97); }
+    .dial:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; transform: none; }
+    .dial .glyph { font-size: 26px; line-height: 1; }
+
+    .dial-start { background: var(--accent); color: var(--ink); }
+    .dial-rec   { background: var(--ink);    color: #fff; }
+    .dial-rec .glyph { color: var(--rec); }
+    .dial.recording { background: var(--rec); color: #fff; }
+    .dial.recording .glyph { color: #fff; }
+
+    .status {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; font-weight: 600; color: var(--muted);
+      background: var(--panel); border-radius: 13px; padding: 11px 14px;
+    }
+    .status .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+    .status .dot.live { background: #29b56a; }
+    .status .dot.rec  { background: var(--rec); animation: pulse 1s infinite; }
+    @keyframes pulse { 50% { opacity: .25; } }
+    .reset { background: none; border: none; color: var(--muted); font-size: 11px; font-weight: 600; cursor: pointer; text-decoration: underline; align-self: center; }
+
+    /* ---------- Stage ---------- */
+    .stage {
+      flex: 1; min-width: 0;
+      display: flex; align-items: center; justify-content: center;
+      padding: 22px;
+      background:
+        radial-gradient(circle at 50% 38%, #e2dfd7 0%, var(--bg) 70%);
+    }
+    .placeholder { text-align: center; color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: 26px; }
+    .grille {
+      width: 190px; height: 190px; border-radius: 50%;
+      background-image: radial-gradient(var(--ink) 22%, transparent 23%);
+      background-size: 14px 14px; background-position: center;
+      opacity: .85;
+      -webkit-mask-image: radial-gradient(circle at center, #000 62%, transparent 66%);
+              mask-image: radial-gradient(circle at center, #000 62%, transparent 66%);
+      animation: breathe 3.4s ease-in-out infinite;
+    }
+    @keyframes breathe { 50% { opacity: .45; transform: scale(.97); } }
+    .placeholder p { font-size: 14px; font-weight: 500; max-width: 280px; line-height: 1.5; }
+    .placeholder strong { color: var(--ink); }
+
+    /* preview + overlays */
+    .preview-wrap {
+      position: relative; max-width: 100%; max-height: 100%;
+      display: flex; line-height: 0;
+    }
+    #preview {
+      max-width: 100%; max-height: calc(100vh - 44px); width: auto; height: auto;
+      object-fit: contain;
+      border-radius: 18px;
+      box-shadow: 0 24px 70px rgba(0,0,0,.3);
+      background: #000;
+    }
+    .chip, .rec-badge {
+      position: absolute; top: 14px;
+      display: flex; align-items: center; gap: 7px;
+      padding: 7px 12px; border-radius: 99px;
+      font-size: 12px; font-weight: 700; letter-spacing: .02em;
+      line-height: 1;
+      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+      font-variant-numeric: tabular-nums;
+    }
+    .chip { left: 14px; background: rgba(20,19,13,.55); color: #fff; }
+    .rec-badge { right: 14px; background: rgba(229,72,77,.92); color: #fff; }
+    .rec-dot { width: 9px; height: 9px; border-radius: 50%; background: #fff; animation: pulse 1s infinite; }
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand"><span class="chip"></span> Screen Recorder</div>
+    <h1>Screen Cam<span class="sub">Merge</span></h1>
+
+    <div class="card tight">
+      <div>
+        <label class="lbl" for="camSelect">Webcam</label>
+        <select id="camSelect"></select>
+      </div>
+      <div>
+        <label class="lbl" for="micSelect">Microphone</label>
+        <select id="micSelect"></select>
+      </div>
+    </div>
+
+    <div class="card tight">
+      <label class="lbl">Camera position <span class="hint">drag on preview ✋</span></label>
+      <div class="seg" id="posSeg">
+        <button data-pos="bl" class="active">BL</button>
+        <button data-pos="br">BR</button>
+        <button data-pos="tl">TL</button>
+        <button data-pos="tr">TR</button>
+      </div>
+      <label class="lbl">Size <span class="val" id="sizeVal">28%</span></label>
+      <input type="range" id="sizeRange" min="12" max="55" value="28" />
+      <label class="lbl">Edge smoothing <span class="val" id="featherVal">3</span></label>
+      <input type="range" id="featherRange" min="0" max="12" value="3" />
+    </div>
+
+    <div class="card tight">
+      <div>
+        <label class="lbl" for="effectSelect">Webcam effect</label>
+        <select id="effectSelect">
+          <option value="none">None</option>
+          <option value="bw">Black &amp; white</option>
+          <option value="sepia">Sepia</option>
+          <option value="vintage">Vintage</option>
+          <option value="cool">Cool</option>
+          <option value="warm">Warm</option>
+          <option value="invert">Invert</option>
+        </select>
+      </div>
+      <label class="toggle"><span>Mirror webcam</span><input type="checkbox" id="mirrorToggle" checked /></label>
+      <label class="toggle"><span>Soft drop shadow</span><input type="checkbox" id="shadowToggle" checked /></label>
+      <label class="toggle"><span>Remember settings</span><input type="checkbox" id="persistToggle" checked /></label>
+    </div>
+
+    <div class="transport">
+      <div class="dial-row">
+        <button class="dial dial-start" id="startBtn">
+          <span class="glyph" id="startGlyph">▶</span><span id="startLabel">Start</span>
+        </button>
+        <button class="dial dial-rec" id="recBtn" disabled>
+          <span class="glyph" id="recGlyph">●</span><span id="recLabel">Record</span>
+        </button>
+      </div>
+      <div class="status" id="status"><span class="dot"></span>Idle — press Start.</div>
+      <button class="reset" id="resetBtn">Reset settings</button>
+    </div>
+  </aside>
+
+  <main class="stage">
+    <div class="placeholder" id="placeholder">
+      <div class="grille"></div>
+      <p>Press <strong>Start</strong> to pick a screen or window.<br />Your webcam is cut out and layered on top.</p>
+    </div>
+    <div class="preview-wrap">
+      <canvas id="preview" style="display:none;"></canvas>
+      <div class="chip" id="resChip" style="display:none;">— × — · — fps</div>
+      <div class="rec-badge" id="recBadge" style="display:none;">
+        <span class="rec-dot"></span>REC <span id="recTime">00:00</span>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
+  <script src="app.js"></script>
+</body>
+</html>
