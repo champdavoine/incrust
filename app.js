@@ -8,6 +8,10 @@ const els = {
   sizeVal: document.getElementById('sizeVal'),
   featherRange: document.getElementById('featherRange'),
   featherVal: document.getElementById('featherVal'),
+  formatSeg: document.getElementById('formatSeg'),
+  zoomRange: document.getElementById('zoomRange'),
+  zoomVal: document.getElementById('zoomVal'),
+  followToggle: document.getElementById('followToggle'),
   effectSelect: document.getElementById('effectSelect'),
   mirrorToggle: document.getElementById('mirrorToggle'),
   shadowToggle: document.getElementById('shadowToggle'),
@@ -31,6 +35,12 @@ const state = {
   pos: 'bl',
   custom: null,      // {x, y} camera CENTER as fraction of canvas, or null for preset
   camRect: null,     // last drawn camera rect in canvas px (for drag hit-testing)
+  format: 'match',   // match | landscape | portrait | square
+  zoom: 1,           // 1 = fit, >1 = crop in
+  pan: { x: 0.5, y: 0.5 }, // crop CENTER as fraction of the source screen
+  follow: false,     // auto-pan toward on-screen motion
+  followTarget: null,
+  view: { fracW: 1, fracH: 1 }, // visible fraction of source (set each frame)
   size: 0.28,        // camera height as fraction of canvas height
   feather: 3,
   effect: 'none',
@@ -79,6 +89,7 @@ function saveSettings() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       pos: state.pos, custom: state.custom, size: state.size, feather: state.feather,
+      format: state.format, zoom: state.zoom, pan: state.pan, follow: state.follow,
       effect: state.effect, mirror: state.mirror, shadow: state.shadow,
       camId: els.camSelect.value, micId: els.micSelect.value,
     }));
@@ -93,6 +104,10 @@ function loadSettings() {
   state.custom = data.custom ?? null;
   state.size = data.size ?? state.size;
   state.feather = data.feather ?? state.feather;
+  state.format = data.format ?? state.format;
+  state.zoom = data.zoom ?? state.zoom;
+  state.pan = data.pan ?? state.pan;
+  state.follow = data.follow ?? state.follow;
   state.effect = data.effect ?? state.effect;
   state.mirror = data.mirror ?? state.mirror;
   state.shadow = data.shadow ?? state.shadow;
@@ -103,11 +118,16 @@ function loadSettings() {
   els.sizeVal.textContent = els.sizeRange.value + '%';
   els.featherRange.value = state.feather;
   els.featherVal.textContent = state.feather;
+  els.zoomRange.value = Math.round(state.zoom * 100);
+  els.zoomVal.textContent = state.zoom.toFixed(1) + '×';
+  els.followToggle.checked = state.follow;
   els.effectSelect.value = state.effect;
   els.mirrorToggle.checked = state.mirror;
   els.shadowToggle.checked = state.shadow;
   els.posSeg.querySelectorAll('button').forEach(b =>
     b.classList.toggle('active', !state.custom && b.dataset.pos === state.pos));
+  els.formatSeg.querySelectorAll('button').forEach(b =>
+    b.classList.toggle('active', b.dataset.fmt === state.format));
 }
 
 // --- Device enumeration ------------------------------------------------------
@@ -142,6 +162,26 @@ els.posSeg.addEventListener('click', (e) => {
   saveSettings();
 });
 
+els.formatSeg.addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  els.formatSeg.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  state.format = btn.dataset.fmt;
+  state.pan = { x: 0.5, y: 0.5 }; // recenter the frame on a format change
+  saveSettings();
+});
+els.zoomRange.addEventListener('input', () => {
+  state.zoom = els.zoomRange.value / 100;
+  els.zoomVal.textContent = state.zoom.toFixed(1) + '×';
+  saveSettings();
+});
+els.followToggle.addEventListener('change', () => {
+  state.follow = els.followToggle.checked;
+  state.followTarget = null;
+  saveSettings();
+});
+
 // Drag the webcam anywhere on the preview.
 let drag = null; // { dx, dy } cursor offset from cam center, in canvas px
 function canvasPoint(e) {
@@ -151,37 +191,50 @@ function canvasPoint(e) {
     y: (e.clientY - r.top) * (els.preview.height / r.height),
   };
 }
-els.preview.addEventListener('pointerdown', (e) => {
+let panDrag = null; // { startX, startY, panX, panY }
+const cropActive = () => state.view.fracW < 0.999 || state.view.fracH < 0.999;
+const overCam = (p) => {
   const c = state.camRect;
-  if (!c) return;
+  return c && p.x >= c.x && p.x <= c.x + c.w && p.y >= c.y && p.y <= c.y + c.h;
+};
+els.preview.addEventListener('pointerdown', (e) => {
   const p = canvasPoint(e);
-  if (p.x >= c.x && p.x <= c.x + c.w && p.y >= c.y && p.y <= c.y + c.h) {
+  if (overCam(p)) {                       // grab the webcam → move it
+    const c = state.camRect;
     drag = { dx: p.x - (c.x + c.w / 2), dy: p.y - (c.y + c.h / 2) };
     els.preview.setPointerCapture(e.pointerId);
     els.preview.style.cursor = 'grabbing';
     els.posSeg.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+  } else if (cropActive() && !state.follow) { // grab the background → pan the frame
+    panDrag = { startX: p.x, startY: p.y, panX: state.pan.x, panY: state.pan.y };
+    els.preview.setPointerCapture(e.pointerId);
+    els.preview.style.cursor = 'grabbing';
   }
 });
 els.preview.addEventListener('pointermove', (e) => {
-  const c = state.camRect;
+  const p = canvasPoint(e);
   if (drag) {
-    const p = canvasPoint(e);
     state.custom = {
       x: (p.x - drag.dx) / els.preview.width,
       y: (p.y - drag.dy) / els.preview.height,
     };
-  } else if (c) {
-    const p = canvasPoint(e);
-    const over = p.x >= c.x && p.x <= c.x + c.w && p.y >= c.y && p.y <= c.y + c.h;
-    els.preview.style.cursor = over ? 'grab' : 'default';
+  } else if (panDrag) {
+    const { fracW, fracH } = state.view;
+    const nx = panDrag.panX - ((p.x - panDrag.startX) / els.preview.width) * fracW;
+    const ny = panDrag.panY - ((p.y - panDrag.startY) / els.preview.height) * fracH;
+    state.pan.x = Math.min(1 - fracW / 2, Math.max(fracW / 2, nx));
+    state.pan.y = Math.min(1 - fracH / 2, Math.max(fracH / 2, ny));
+  } else {
+    els.preview.style.cursor = overCam(p) ? 'grab' : (cropActive() && !state.follow ? 'move' : 'default');
   }
 });
 function endDrag(e) {
-  if (!drag) return;
+  if (!drag && !panDrag) return;
   drag = null;
+  panDrag = null;
   els.preview.style.cursor = 'grab';
   try { els.preview.releasePointerCapture(e.pointerId); } catch (_) {}
-  saveSettings(); // remember the dropped position
+  saveSettings(); // remember the dropped position / pan
 }
 els.preview.addEventListener('pointerup', endDrag);
 els.preview.addEventListener('pointercancel', endDrag);
@@ -283,20 +336,72 @@ async function pump() {
   if (state.running) requestAnimationFrame(pump);
 }
 
+// Output aspect ratio (width / height) per format. null = match the screen.
+const FORMAT_AR = { match: null, landscape: 16 / 9, portrait: 9 / 16, square: 1 };
+
+// --- Auto-follow: pan the crop toward where the screen is changing -----------
+const motionCanvas = document.createElement('canvas');
+const motionCtx = motionCanvas.getContext('2d', { willReadFrequently: true });
+let prevLuma = null;
+function updateFollow(sw, sh, fracW, fracH) {
+  const mw = 96, mh = Math.max(1, Math.round(96 * sh / sw));
+  if (motionCanvas.width !== mw || motionCanvas.height !== mh) {
+    motionCanvas.width = mw; motionCanvas.height = mh; prevLuma = null;
+  }
+  motionCtx.drawImage(screenVideo, 0, 0, mw, mh);
+  const d = motionCtx.getImageData(0, 0, mw, mh).data;
+  if (!prevLuma) {
+    prevLuma = new Float32Array(mw * mh);
+    for (let i = 0, p = 0; i < d.length; i += 4, p++)
+      prevLuma[p] = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+    return;
+  }
+  let sx = 0, sy = 0, sw8 = 0;
+  for (let i = 0, p = 0; i < d.length; i += 4, p++) {
+    const l = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+    const diff = Math.abs(l - prevLuma[p]);
+    prevLuma[p] = l;
+    if (diff > 18) { const x = p % mw, y = (p / mw) | 0; sx += x * diff; sy += y * diff; sw8 += diff; }
+  }
+  if (sw8 > 60) state.followTarget = { x: (sx / sw8) / mw, y: (sy / sw8) / mh };
+  const t = state.followTarget || { x: 0.5, y: 0.5 };
+  const tx = Math.min(1 - fracW / 2, Math.max(fracW / 2, t.x));
+  const ty = Math.min(1 - fracH / 2, Math.max(fracH / 2, t.y));
+  state.pan.x += (tx - state.pan.x) * 0.08; // ease for smooth panning
+  state.pan.y += (ty - state.pan.y) * 0.08;
+}
+
 // --- Compositing -------------------------------------------------------------
 function render() {
   if (!state.running) return;
+  const sw = screenVideo.videoWidth, sh = screenVideo.videoHeight;
+  if (!sw) { requestAnimationFrame(render); return; }
 
-  // Keep the canvas locked to the live screen resolution (windows can resize).
-  if (screenVideo.videoWidth &&
-      (els.preview.width !== screenVideo.videoWidth || els.preview.height !== screenVideo.videoHeight)) {
-    els.preview.width = screenVideo.videoWidth;
-    els.preview.height = screenVideo.videoHeight;
+  // Work out the crop region of the source for the chosen output format/zoom.
+  const sourceAR = sw / sh;
+  const outAR = FORMAT_AR[state.format] || sourceAR;
+  let cropW, cropH;
+  if (outAR <= sourceAR) { cropH = sh; cropW = sh * outAR; }   // vertical/narrower slice
+  else                   { cropW = sw; cropH = sw / outAR; }   // horizontal slice
+  cropW = Math.min(sw, cropW / state.zoom);
+  cropH = Math.min(sh, cropH / state.zoom);
+  const fracW = cropW / sw, fracH = cropH / sh;
+  state.view = { fracW, fracH };
+
+  if (state.follow && (fracW < 0.999 || fracH < 0.999)) updateFollow(sw, sh, fracW, fracH);
+
+  // Clamp the crop centre so the rectangle stays on-screen.
+  const cx = (Math.min(1 - fracW / 2, Math.max(fracW / 2, state.pan.x)) * sw) - cropW / 2;
+  const cy = (Math.min(1 - fracH / 2, Math.max(fracH / 2, state.pan.y)) * sh) - cropH / 2;
+
+  // Canvas = crop size at source resolution (1:1, full quality).
+  const W = Math.round(cropW), H = Math.round(cropH);
+  if (els.preview.width !== W || els.preview.height !== H) {
+    els.preview.width = W; els.preview.height = H;
   }
-  const W = els.preview.width, H = els.preview.height;
 
-  // 1. Screen fills the canvas.
-  ctx.drawImage(screenVideo, 0, 0, W, H);
+  // 1. Draw the cropped screen region to fill the canvas.
+  ctx.drawImage(screenVideo, cx, cy, cropW, cropH, 0, 0, W, H);
 
   // 2. Build the cut-out person on the offscreen canvas.
   if (latestMask && camVideo.videoWidth) {

@@ -230,6 +230,20 @@
     </div>
 
     <div class="card tight">
+      <label class="lbl">Output format</label>
+      <div class="seg" id="formatSeg">
+        <button data-fmt="match" class="active">Screen</button>
+        <button data-fmt="landscape">16:9</button>
+        <button data-fmt="portrait">9:16</button>
+        <button data-fmt="square">1:1</button>
+      </div>
+      <label class="lbl">Zoom <span class="val" id="zoomVal">1.0×</span></label>
+      <input type="range" id="zoomRange" min="100" max="300" value="100" />
+      <label class="toggle"><span>Auto-follow action</span><input type="checkbox" id="followToggle" /></label>
+      <div class="hint" id="cropHint">Tip: drag the preview background to choose which part of the screen to frame.</div>
+    </div>
+
+    <div class="card tight">
       <label class="lbl">Camera position <span class="hint">drag on preview ✋</span></label>
       <div class="seg" id="posSeg">
         <button data-pos="bl" class="active">BL</button>
