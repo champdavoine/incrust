@@ -179,6 +179,12 @@ els.zoomRange.addEventListener('input', () => {
 els.followToggle.addEventListener('change', () => {
   state.follow = els.followToggle.checked;
   state.followTarget = null;
+  // Following only has somewhere to pan when the frame is cropped. If we're at
+  // full screen (no crop), zoom in a touch so enabling follow does something.
+  if (state.follow && state.format === 'match' && state.zoom === 1) {
+    els.zoomRange.value = 150;
+    els.zoomRange.dispatchEvent(new Event('input'));
+  }
   saveSettings();
 });
 
@@ -338,37 +344,56 @@ async function pump() {
 
 // Output aspect ratio (width / height) per format. null = match the screen.
 const FORMAT_AR = { match: null, landscape: 16 / 9, portrait: 9 / 16, square: 1 };
+// Target size of the SHORT side of the output, in px. Vertical → 1080 wide
+// (1080×1920), 16:9 → 1080 tall (1920×1080), 1:1 → 1080×1080. "Screen" keeps
+// the native crop resolution instead.
+const OUTPUT_SHORT = 1080;
 
-// --- Auto-follow: pan the crop toward where the screen is changing -----------
+// --- Auto-follow: pan the crop toward the mouse (native) or on-screen motion -
+// In the Electron app the OS cursor position arrives via the preload bridge as
+// a {x, y} fraction of the display. That's exact — unlike motion detection it
+// tracks the real pointer. Falls back to motion when running in a plain browser.
+let nativeCursor = null;
+if (window.native && window.native.onCursor) {
+  window.native.onCursor((pos) => { nativeCursor = pos; });
+}
+
 const motionCanvas = document.createElement('canvas');
 const motionCtx = motionCanvas.getContext('2d', { willReadFrequently: true });
 let prevLuma = null;
 function updateFollow(sw, sh, fracW, fracH) {
-  const mw = 96, mh = Math.max(1, Math.round(96 * sh / sw));
-  if (motionCanvas.width !== mw || motionCanvas.height !== mh) {
-    motionCanvas.width = mw; motionCanvas.height = mh; prevLuma = null;
+  if (nativeCursor) {
+    // True mouse-follow: aim the crop at the cursor.
+    state.followTarget = { x: nativeCursor.x, y: nativeCursor.y };
+  } else {
+    // Browser fallback: follow where the screen is changing the most.
+    const mw = 96, mh = Math.max(1, Math.round(96 * sh / sw));
+    if (motionCanvas.width !== mw || motionCanvas.height !== mh) {
+      motionCanvas.width = mw; motionCanvas.height = mh; prevLuma = null;
+    }
+    motionCtx.drawImage(screenVideo, 0, 0, mw, mh);
+    const d = motionCtx.getImageData(0, 0, mw, mh).data;
+    if (!prevLuma) {
+      prevLuma = new Float32Array(mw * mh);
+      for (let i = 0, p = 0; i < d.length; i += 4, p++)
+        prevLuma[p] = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+      return;
+    }
+    let sx = 0, sy = 0, sw8 = 0;
+    for (let i = 0, p = 0; i < d.length; i += 4, p++) {
+      const l = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+      const diff = Math.abs(l - prevLuma[p]);
+      prevLuma[p] = l;
+      if (diff > 18) { const x = p % mw, y = (p / mw) | 0; sx += x * diff; sy += y * diff; sw8 += diff; }
+    }
+    if (sw8 > 60) state.followTarget = { x: (sx / sw8) / mw, y: (sy / sw8) / mh };
   }
-  motionCtx.drawImage(screenVideo, 0, 0, mw, mh);
-  const d = motionCtx.getImageData(0, 0, mw, mh).data;
-  if (!prevLuma) {
-    prevLuma = new Float32Array(mw * mh);
-    for (let i = 0, p = 0; i < d.length; i += 4, p++)
-      prevLuma[p] = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
-    return;
-  }
-  let sx = 0, sy = 0, sw8 = 0;
-  for (let i = 0, p = 0; i < d.length; i += 4, p++) {
-    const l = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
-    const diff = Math.abs(l - prevLuma[p]);
-    prevLuma[p] = l;
-    if (diff > 18) { const x = p % mw, y = (p / mw) | 0; sx += x * diff; sy += y * diff; sw8 += diff; }
-  }
-  if (sw8 > 60) state.followTarget = { x: (sx / sw8) / mw, y: (sy / sw8) / mh };
+
   const t = state.followTarget || { x: 0.5, y: 0.5 };
   const tx = Math.min(1 - fracW / 2, Math.max(fracW / 2, t.x));
   const ty = Math.min(1 - fracH / 2, Math.max(fracH / 2, t.y));
-  state.pan.x += (tx - state.pan.x) * 0.08; // ease for smooth panning
-  state.pan.y += (ty - state.pan.y) * 0.08;
+  state.pan.x += (tx - state.pan.x) * 0.12; // ease for smooth panning
+  state.pan.y += (ty - state.pan.y) * 0.12;
 }
 
 // --- Compositing -------------------------------------------------------------
@@ -394,8 +419,19 @@ function render() {
   const cx = (Math.min(1 - fracW / 2, Math.max(fracW / 2, state.pan.x)) * sw) - cropW / 2;
   const cy = (Math.min(1 - fracH / 2, Math.max(fracH / 2, state.pan.y)) * sh) - cropH / 2;
 
-  // Canvas = crop size at source resolution (1:1, full quality).
-  const W = Math.round(cropW), H = Math.round(cropH);
+  // Output canvas size: standardise to a 1080-px short side per format so the
+  // recording is a clean 1080×1920 / 1920×1080 / 1080×1080. The source crop is
+  // still sampled at full resolution; only the destination size is fixed.
+  // "Screen" keeps the native crop res. H.264 needs even dimensions.
+  let W, H;
+  if (state.format === 'match') {
+    W = Math.round(cropW); H = Math.round(cropH);
+  } else if (outAR >= 1) {
+    H = OUTPUT_SHORT; W = Math.round(OUTPUT_SHORT * outAR);
+  } else {
+    W = OUTPUT_SHORT; H = Math.round(OUTPUT_SHORT / outAR);
+  }
+  W -= W % 2; H -= H % 2;
   if (els.preview.width !== W || els.preview.height !== H) {
     els.preview.width = W; els.preview.height = H;
   }
