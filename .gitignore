@@ -1,3 +1,5 @@
 .DS_Store
 *.webm
 *.mp4
+node_modules/
+dist/

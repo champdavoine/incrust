@@ -1,0 +1,30 @@
+{
+  "name": "incrust",
+  "version": "1.0.0",
+  "description": "Incrust — capture your screen + webcam, cut the background, composite the person over the screen, and record.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "build": {
+    "appId": "com.champdavoine.incrust",
+    "productName": "Incrust",
+    "files": ["main.js", "preload.js", "index.html", "app.js", "favicon.svg"],
+    "mac": {
+      "category": "public.app-category.video",
+      "target": ["dmg"],
+      "icon": "build/icon.icns",
+      "extendInfo": {
+        "NSCameraUsageDescription": "Records your webcam to composite over the screen.",
+        "NSMicrophoneUsageDescription": "Records your microphone into the output video.",
+        "NSScreenCaptureUsageDescription": "Captures your screen to composite the webcam over it."
+      }
+    },
+    "win": { "target": ["nsis"], "icon": "build/icon.png" }
+  },
+  "devDependencies": {
+    "electron": "^42.0.0",
+    "electron-builder": "^24.13.3"
+  }
+}

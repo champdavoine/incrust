@@ -1,22 +1,39 @@
-# Screen + Cam Merge
+# Incrust
 
 Captures your screen and webcam at the same time, cuts the background out of the
 webcam (detourage via MediaPipe Selfie Segmentation), composites the floating
-person over the screen on a `<canvas>`, and records the result to a `.webm` file.
+person over the screen on a `<canvas>`, and records the result to an `.mp4` file.
 
-100% browser, no build step, no install. Runs locally.
+Ships as a native **Electron** desktop app (macOS / Windows). The UI is plain
+HTML/JS — no build step.
 
-## Run
+## Run (desktop app)
+
+```bash
+npm install
+npm start
+```
+
+This opens the native **Incrust** window with screen, camera and microphone
+access wired up.
+
+### Package a distributable
+
+```bash
+npm run dist    # → dist/ (.dmg on macOS, NSIS installer on Windows)
+```
+
+## Run in a browser (alternative)
 
 `getDisplayMedia` / `getUserMedia` need a *secure context*, so serve over
 `localhost` (a plain `file://` open won't get camera/screen permission):
 
 ```bash
-cd screen-cam-merge
 python3 -m http.server 8000
 ```
 
-Open http://localhost:8000 in **Chrome** (best `MediaRecorder` + segmentation support).
+Open http://localhost:8000 in **Chrome**. Note: native mouse-follow needs the
+Electron app; the browser falls back to motion-based follow.
 
 ## Use
 
