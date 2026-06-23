@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-  <title>Screen · Cam Merge</title>
+  <title>Incrust</title>
   <style>
     :root {
       --bg:      #d6d3ca;   /* warm taupe */
@@ -18,6 +18,11 @@
     }
     * { box-sizing: border-box; }
     html, body { height: 100%; }
+    /* keyboard focus ring — visible only for keyboard users, themed to the ink */
+    :focus { outline: none; }
+    button:focus-visible, select:focus-visible, input:focus-visible, .toggle:focus-within {
+      outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 10px;
+    }
     body {
       margin: 0;
       font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
@@ -30,33 +35,57 @@
     }
 
     /* ---------- Sidebar ---------- */
+    /* Sidebar = fixed header (title) + scrolling card list + fixed footer
+       (transport). Only the middle scrolls, so the actions never cover the
+       controls and the title never leaves. */
     .sidebar {
       width: 340px;
       flex-shrink: 0;
-      padding: 22px 18px 18px;
+      padding: 22px 18px 16px;
       display: flex;
       flex-direction: column;
-      gap: 14px;
-      overflow-y: auto;
+      gap: 12px;
+      overflow: hidden;
       background: var(--bg);
     }
+    .sidebar-head { flex-shrink: 0; }
+    .sidebar-scroll {
+      flex: 1; min-height: 0;
+      display: flex; flex-direction: column; gap: 12px;
+      overflow-y: auto; overflow-x: hidden;
+      padding: 4px 8px 4px 0;
+      margin-right: -4px;
+      scrollbar-gutter: stable;
+    }
+    /* Soft, themed scrollbar — slim rounded pill in the taupe, darkens on
+       hover. The transparent border carves padding so it floats. */
+    .sidebar-scroll::-webkit-scrollbar { width: 12px; }
+    .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
+    .sidebar-scroll::-webkit-scrollbar-thumb {
+      background: var(--line);
+      border-radius: 99px;
+      border: 4px solid var(--bg);
+      background-clip: padding-box;
+    }
+    .sidebar-scroll::-webkit-scrollbar-thumb:hover { background: var(--muted); }
     .brand {
       display: flex; align-items: center; gap: 8px;
       font-size: 11px; font-weight: 700; letter-spacing: .14em;
       text-transform: uppercase; color: var(--muted);
     }
-    .brand .chip { width: 9px; height: 9px; border-radius: 50%; background: var(--rec); }
     h1 {
-      margin: 2px 0 6px;
-      font-size: 34px; font-weight: 800; line-height: .98; letter-spacing: -.02em;
+      margin: 4px 0 8px;
+      font-size: 34px; font-weight: 800; line-height: .96; letter-spacing: -.025em;
     }
     h1 .sub { display: block; color: var(--muted); }
 
     .card {
       background: var(--panel);
-      border-radius: 20px;
-      padding: 16px;
+      border: 1px solid rgba(20,19,13,.05);
+      border-radius: 18px;
+      padding: 15px 16px;
       display: flex; flex-direction: column; gap: 12px;
+      box-shadow: 0 1px 2px rgba(20,19,13,.03), 0 6px 18px rgba(20,19,13,.04);
     }
     .card.tight { gap: 10px; }
     label.lbl {
@@ -71,44 +100,58 @@
     select {
       appearance: none; -webkit-appearance: none;
       width: 100%;
-      background: var(--panel-2);
+      background-color: var(--panel-2);
       color: var(--ink);
-      border: none;
+      border: 1px solid transparent;
       border-radius: 13px;
       padding: 12px 14px;
       font-size: 13px; font-weight: 600;
       cursor: pointer;
+      transition: border-color .15s ease, background-color .15s ease;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2314130d' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
       background-repeat: no-repeat;
       background-position: right 14px center;
     }
+    select:hover { border-color: var(--line); }
 
-    /* segmented position */
-    .seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-    .seg button {
+    /* segmented control — one inset track with a sliding-pill active state */
+    .seg {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px;
       background: var(--panel-2);
+      padding: 3px; border-radius: 13px;
+    }
+    .seg button {
+      background: transparent;
       color: var(--muted);
       border: none;
-      border-radius: 11px;
-      padding: 10px 4px;
+      border-radius: 10px;
+      padding: 9px 4px;
       font-size: 11px; font-weight: 700;
       cursor: pointer;
-      transition: all .15s ease;
+      transition: color .15s ease, background .15s ease, box-shadow .15s ease;
     }
-    .seg button:hover { background: var(--line); color: var(--ink); }
-    .seg button.active { background: var(--ink); color: #fff; }
-    .seg button.active:hover { background: #000; }
+    .seg button:hover { color: var(--ink); }
+    .seg button.active {
+      background: var(--ink); color: #fff;
+      box-shadow: 0 1px 4px rgba(20,19,13,.25);
+    }
 
-    /* range sliders */
+    /* range sliders — track fills to the thumb (progress), set via --fill in JS */
     input[type=range] {
       -webkit-appearance: none; appearance: none;
       width: 100%; height: 6px; border-radius: 99px;
-      background: var(--line); cursor: pointer; margin: 6px 0;
+      background: linear-gradient(to right, var(--ink) var(--fill, 0%), var(--line) var(--fill, 0%));
+      cursor: pointer; margin: 8px 0 4px;
     }
     input[type=range]::-webkit-slider-thumb {
-      -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%;
-      background: var(--ink); border: 4px solid var(--panel);
-      box-shadow: 0 1px 4px rgba(0,0,0,.35);
+      -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%;
+      background: var(--ink); border: 3px solid var(--panel);
+      box-shadow: 0 1px 4px rgba(0,0,0,.3);
+      transition: transform .12s ease, box-shadow .2s ease;
+    }
+    input[type=range]:hover::-webkit-slider-thumb { transform: scale(1.12); }
+    input[type=range]:active::-webkit-slider-thumb {
+      transform: scale(1.06); box-shadow: 0 2px 8px rgba(0,0,0,.4);
     }
 
     /* pill toggles */
@@ -131,28 +174,33 @@
     input[type=checkbox]:checked { background: var(--ink); }
     input[type=checkbox]:checked::after { transform: translateX(19px); }
 
-    /* transport */
-    .transport { margin-top: auto; display: flex; flex-direction: column; gap: 14px; align-items: stretch; }
-    .dial-row { display: flex; gap: 14px; }
-    .dial {
-      flex: 1; aspect-ratio: 1 / 1; border-radius: 50%;
-      border: none; cursor: pointer; position: relative;
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      gap: 6px;
-      font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
-      transition: transform .12s ease, box-shadow .2s ease;
-      box-shadow: 0 6px 18px rgba(0,0,0,.18);
+    /* transport — pinned to the bottom of the sidebar, clear primary/secondary
+       hierarchy: Start (accent) leads, Record (ink) follows once live. */
+    .transport {
+      flex-shrink: 0;
+      display: flex; flex-direction: column; gap: 10px;
+      padding-top: 14px; margin-top: 2px;
+      border-top: 1px solid var(--line);
     }
-    .dial:hover { box-shadow: 0 9px 24px rgba(0,0,0,.26); transform: translateY(-1px); }
-    .dial:active { transform: scale(.97); }
-    .dial:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; transform: none; }
-    .dial .glyph { font-size: 26px; line-height: 1; }
+    .btn-row { display: grid; grid-template-columns: 1.25fr 1fr; gap: 10px; }
+    .btn {
+      display: flex; align-items: center; justify-content: center; gap: 9px;
+      height: 58px; border: none; border-radius: 17px; cursor: pointer;
+      font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+      transition: transform .12s ease, box-shadow .2s ease, filter .2s ease;
+      box-shadow: 0 6px 16px rgba(0,0,0,.14);
+    }
+    .btn:hover { transform: translateY(-1px); box-shadow: 0 10px 24px rgba(0,0,0,.22); }
+    .btn:active { transform: scale(.98); }
+    .btn:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; transform: none; }
+    .btn .glyph { font-size: 19px; line-height: 1; }
 
-    .dial-start { background: var(--accent); color: var(--ink); }
-    .dial-rec   { background: var(--ink);    color: #fff; }
-    .dial-rec .glyph { color: var(--rec); }
-    .dial.recording { background: var(--rec); color: #fff; }
-    .dial.recording .glyph { color: #fff; }
+    .btn-start { background: var(--accent); color: var(--ink); }
+    .btn-start:hover { filter: brightness(1.04); }
+    .btn-rec   { background: var(--ink);    color: #fff; }
+    .btn-rec .glyph { color: var(--rec); }
+    .btn-rec.recording { background: var(--rec); color: #fff; }
+    .btn-rec.recording .glyph { color: #fff; }
 
     .status {
       display: flex; align-items: center; gap: 8px;
@@ -163,16 +211,19 @@
     .status .dot.live { background: #29b56a; }
     .status .dot.rec  { background: var(--rec); animation: pulse 1s infinite; }
     @keyframes pulse { 50% { opacity: .25; } }
-    .reset { background: none; border: none; color: var(--muted); font-size: 11px; font-weight: 600; cursor: pointer; text-decoration: underline; align-self: center; }
+    .reset { background: none; border: none; color: var(--muted); font-size: 11px; font-weight: 600; cursor: pointer; text-decoration: underline; align-self: center; padding: 2px; }
+    .reset:hover { color: var(--ink); }
 
     /* ---------- Stage ---------- */
     .stage {
-      flex: 1; min-width: 0;
-      display: flex; align-items: center; justify-content: center;
-      padding: 22px;
+      flex: 1; min-width: 0; min-height: 0;
+      display: grid; grid-template: 1fr / 1fr; /* one cell */
+      place-items: center;
+      padding: 16px;
       background:
         radial-gradient(circle at 50% 38%, #e2dfd7 0%, var(--bg) 70%);
     }
+    .stage > * { grid-area: 1 / 1; } /* stack placeholder + preview in same cell */
     .placeholder { text-align: center; color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: 26px; }
     .grille {
       width: 190px; height: 190px; border-radius: 50%;
@@ -187,15 +238,26 @@
     .placeholder p { font-size: 14px; font-weight: 500; max-width: 280px; line-height: 1.5; }
     .placeholder strong { color: var(--ink); }
 
-    /* preview + overlays */
+    /* preview + overlays — the wrap fills the whole stage cell and the canvas
+       grows to fill it while keeping its aspect ratio, so the preview tracks
+       the window as it resizes. */
     .preview-wrap {
-      position: relative; max-width: 100%; max-height: 100%;
+      width: 100%; height: 100%;
+      min-width: 0; min-height: 0;
+      display: flex; align-items: center; justify-content: center;
+      line-height: 0;
+    }
+    /* shrink-wraps the canvas so the overlay badges anchor to the video edges */
+    .preview-frame {
+      position: relative;
       display: flex; line-height: 0;
+      max-width: 100%; max-height: 100%;
     }
     #preview {
-      max-width: 100%; max-height: calc(100vh - 44px); width: auto; height: auto;
+      display: block;
+      max-width: 100%; max-height: 100%; width: auto; height: auto;
       object-fit: contain;
-      border-radius: 18px;
+      border-radius: 16px;
       box-shadow: 0 24px 70px rgba(0,0,0,.3);
       background: #000;
     }
@@ -215,9 +277,12 @@
 </head>
 <body>
   <aside class="sidebar">
-    <div class="brand"><span class="chip"></span> Screen Recorder</div>
-    <h1>Screen Cam<span class="sub">Merge</span></h1>
+    <div class="sidebar-head">
+      <div class="brand">Screen Recorder</div>
+      <h1>Incrust<span class="sub">Screen · Cam</span></h1>
+    </div>
 
+    <div class="sidebar-scroll">
     <div class="card tight">
       <div>
         <label class="lbl" for="camSelect">Webcam</label>
@@ -274,17 +339,18 @@
       <label class="toggle"><span>Soft drop shadow</span><input type="checkbox" id="shadowToggle" checked /></label>
       <label class="toggle"><span>Remember settings</span><input type="checkbox" id="persistToggle" checked /></label>
     </div>
+    </div><!-- /.sidebar-scroll -->
 
     <div class="transport">
-      <div class="dial-row">
-        <button class="dial dial-start" id="startBtn">
+      <div class="status" id="status"><span class="dot"></span>Idle — press Start.</div>
+      <div class="btn-row">
+        <button class="btn btn-start" id="startBtn">
           <span class="glyph" id="startGlyph">▶</span><span id="startLabel">Start</span>
         </button>
-        <button class="dial dial-rec" id="recBtn" disabled>
+        <button class="btn btn-rec" id="recBtn" disabled>
           <span class="glyph" id="recGlyph">●</span><span id="recLabel">Record</span>
         </button>
       </div>
-      <div class="status" id="status"><span class="dot"></span>Idle — press Start.</div>
       <button class="reset" id="resetBtn">Reset settings</button>
     </div>
   </aside>
@@ -295,15 +361,32 @@
       <p>Press <strong>Start</strong> to pick a screen or window.<br />Your webcam is cut out and layered on top.</p>
     </div>
     <div class="preview-wrap">
-      <canvas id="preview" style="display:none;"></canvas>
-      <div class="chip" id="resChip" style="display:none;">— × — · — fps</div>
-      <div class="rec-badge" id="recBadge" style="display:none;">
-        <span class="rec-dot"></span>REC <span id="recTime">00:00</span>
+      <div class="preview-frame">
+        <canvas id="preview" style="display:none;"></canvas>
+        <div class="chip" id="resChip" style="display:none;">— × — · — fps</div>
+        <div class="rec-badge" id="recBadge" style="display:none;">
+          <span class="rec-dot"></span>REC <span id="recTime">00:00</span>
+        </div>
       </div>
     </div>
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
   <script src="app.js"></script>
+  <script>
+    // Paint each slider's track up to the thumb with the ink colour. Runs after
+    // app.js (which has already restored saved values), then tracks live input.
+    (function () {
+      const paint = (el) => {
+        const min = +el.min || 0, max = +el.max || 100;
+        const pct = max > min ? ((el.value - min) / (max - min)) * 100 : 0;
+        el.style.setProperty('--fill', pct + '%');
+      };
+      document.querySelectorAll('input[type=range]').forEach((el) => {
+        paint(el);
+        el.addEventListener('input', () => paint(el));
+      });
+    })();
+  </script>
 </body>
 </html>
