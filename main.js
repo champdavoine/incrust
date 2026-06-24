@@ -87,18 +87,22 @@ function wirePermissions() {
   });
 }
 
-app.whenReady().then(async () => {
-  // Prompt for macOS camera + mic access up front so the page gets real streams.
-  if (process.platform === 'darwin') {
-    if (app.dock) app.dock.setIcon(path.join(__dirname, 'build', 'icon.png'));
-    try {
-      await systemPreferences.askForMediaAccess('camera');
-      await systemPreferences.askForMediaAccess('microphone');
-    } catch (_) {}
-  }
-
+app.whenReady().then(() => {
+  // Create the window FIRST. Nothing below is allowed to block it — the dock
+  // icon and the camera/mic permission prompts are best-effort and run after,
+  // so a missing asset or a stalled TCC dialog can never leave the app
+  // running with no window.
   wirePermissions();
   createWindow();
+
+  if (process.platform === 'darwin') {
+    try {
+      if (app.dock) app.dock.setIcon(path.join(__dirname, 'build', 'icon.png'));
+    } catch (_) {}
+    // Fire and forget — the page also requests these via getUserMedia.
+    systemPreferences.askForMediaAccess('camera').catch(() => {});
+    systemPreferences.askForMediaAccess('microphone').catch(() => {});
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
