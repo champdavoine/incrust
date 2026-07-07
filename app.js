@@ -6,6 +6,9 @@ const els = {
   formatSeg: document.getElementById('formatSeg'),
   zoomRange: document.getElementById('zoomRange'),
   zoomVal: document.getElementById('zoomVal'),
+  sizeRange: document.getElementById('sizeRange'),
+  sizeVal: document.getElementById('sizeVal'),
+  effectSelect: document.getElementById('effectSelect'),
   followToggle: document.getElementById('followToggle'),
   settingsBtn: document.getElementById('settingsBtn'),
   settingsPopover: document.getElementById('settingsPopover'),
@@ -38,6 +41,7 @@ const state = {
   followTarget: null,
   view: { fracW: 1, fracH: 1 }, // visible fraction of source (set each frame)
   size: 0.28,        // camera height as fraction of canvas height
+  effect: 'none',
   screenStream: null,
   camStream: null,
   micStream: null,
@@ -97,7 +101,7 @@ const STORAGE_KEY = 'screen-cam-merge:settings';
 function saveSettings() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
-      pos: state.pos, custom: state.custom, size: state.size,
+      pos: state.pos, custom: state.custom, size: state.size, effect: state.effect,
       format: state.format, zoom: state.zoom, pan: state.pan, follow: state.follow,
       camId: els.camSelect.value, micId: els.micSelect.value,
     }));
@@ -116,11 +120,15 @@ function loadSettings() {
   state.zoom = data.zoom ?? state.zoom;
   state.pan = data.pan ?? state.pan;
   state.follow = data.follow ?? state.follow;
+  state.effect = data.effect ?? state.effect;
   state.savedCamId = data.camId || '';
   state.savedMicId = data.micId || '';
   // Reflect into the controls.
   els.zoomRange.value = Math.round(state.zoom * 100);
   els.zoomVal.textContent = state.zoom.toFixed(1) + '×';
+  els.sizeRange.value = Math.round(state.size * 100);
+  els.sizeVal.textContent = els.sizeRange.value + '%';
+  els.effectSelect.value = EFFECTS[state.effect] ? state.effect : 'none';
   els.followToggle.checked = state.follow;
   els.formatSeg.querySelectorAll('button').forEach(b =>
     b.classList.toggle('active', b.dataset.fmt === state.format));
@@ -229,6 +237,27 @@ function endDrag(e) {
 }
 els.preview.addEventListener('pointerup', endDrag);
 els.preview.addEventListener('pointercancel', endDrag);
+// CSS-style filter strings used to color-grade the webcam bubble.
+const EFFECTS = {
+  none: 'none',
+  bw: 'grayscale(1)',
+  sepia: 'sepia(0.85)',
+  vintage: 'sepia(0.5) contrast(1.15) saturate(1.3)',
+  cool: 'saturate(1.2) hue-rotate(-18deg)',
+  warm: 'sepia(0.3) saturate(1.4) hue-rotate(-12deg)',
+  invert: 'invert(1)',
+};
+els.effectSelect.addEventListener('change', () => {
+  state.effect = els.effectSelect.value;
+  saveSettings();
+});
+
+els.sizeRange.addEventListener('input', () => {
+  state.size = els.sizeRange.value / 100;
+  els.sizeVal.textContent = els.sizeRange.value + '%';
+  saveSettings();
+});
+
 // Scroll (or pinch — Chromium reports macOS pinch as wheel + ctrlKey) over the
 // bubble resizes it. Center-anchored for free: state.custom stores the CENTER.
 let sizeChipTimer = null, sizeSaveTimer = null;
@@ -238,6 +267,12 @@ els.preview.addEventListener('wheel', (e) => {
   e.preventDefault();
   const k = e.ctrlKey ? 0.01 : 0.002;
   state.size = Math.min(0.55, Math.max(0.12, state.size * Math.exp(-e.deltaY * k)));
+  // Keep the console slider in sync (value + painted track fill) without
+  // dispatching 'input' — that would write localStorage on every wheel tick.
+  els.sizeRange.value = Math.round(state.size * 100);
+  els.sizeVal.textContent = els.sizeRange.value + '%';
+  const pct = ((els.sizeRange.value - 12) / (55 - 12)) * 100;
+  els.sizeRange.style.setProperty('--fill', pct + '%');
 
   // Transient chip near the bubble center, in CSS px within .preview-frame.
   const c = state.camRect;
@@ -488,6 +523,8 @@ function render() {
     ctx.shadowColor = 'rgba(0,0,0,0.45)';
     ctx.shadowBlur = H * 0.025;
     ctx.shadowOffsetY = H * 0.008;
+    const filter = EFFECTS[state.effect] || 'none';
+    if (filter !== 'none') ctx.filter = filter;
     // Mirror the bubble (selfie view) — flip around the camera's own center.
     ctx.translate(x + camW, y);
     ctx.scale(-1, 1);
