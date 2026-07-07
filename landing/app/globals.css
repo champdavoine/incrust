@@ -1,16 +1,18 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg: #d6d3ca;
-  --color-panel: #e7e4dc;
-  --color-panel-2: #efece5;
-  --color-ink: #14130d;
-  --color-muted: #9a978d;
-  --color-line: #c7c3b8;
-  --color-accent: #f2c500;
+  --color-bg: #dcdad2;
+  --color-surface: #e9e7e0;
+  --color-surface-2: #f4f2ec;
+  --color-ink: #16150f;
+  --color-muted: #8d8a80;
+  --color-line: #c9c5ba;
+  --color-signal: #f2c500;
   --color-rec: #e5484d;
+  --color-stage: #17160f;
 
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-sans: var(--font-geist-sans), -apple-system, BlinkMacSystemFont,
+    "Segoe UI", system-ui, sans-serif;
 }
 
 html {
@@ -23,17 +25,25 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Grain-free soft taupe; thin themed selection */
 ::selection {
-  background: var(--color-accent);
+  background: var(--color-signal);
   color: var(--color-ink);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* stage pegboard: faint dot grid on dark surfaces */
+.dot-grid {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1.4px);
+  background-size: 22px 22px;
 }
 
 @keyframes float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-10px); }
 }
-
 .animate-float {
   animation: float 6s ease-in-out infinite;
 }
@@ -42,7 +52,14 @@ body {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.35; }
 }
-
 .animate-rec {
   animation: pulse-rec 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .animate-float,
+  .animate-rec {
+    animation: none;
+  }
 }
