@@ -1,60 +1,60 @@
 # Incrust
 
-Captures your screen and webcam at the same time, cuts the background out of the
-webcam (detourage via MediaPipe Selfie Segmentation), composites the floating
-person over the screen on a `<canvas>`, and records the result to an `.mp4` file.
+**Your screen. You in it.** Incrust captures your screen and webcam at the same
+time, cuts the background out of the webcam in real time (MediaPipe Selfie
+Segmentation), composites you as a floating bubble over the screen, and records
+straight to `.mp4`. No green screen, no editing.
 
-Ships as a native **Electron** desktop app (macOS / Windows). The UI is plain
-HTML/JS — no build step.
+Ships as a native **Electron** desktop app. The UI is plain HTML/CSS/JS — no
+build step.
 
-## Run (desktop app)
+## Download
 
-```bash
-npm install
-npm start
-```
+**[⬇ Incrust for macOS (Apple Silicon)](https://github.com/champdavoine/incrust/releases/latest/download/Incrust-arm64.dmg)**
 
-This opens the native **Incrust** window with screen, camera and microphone
-access wired up.
-
-### Package a distributable
-
-```bash
-npm run dist    # → dist/ (.dmg on macOS, NSIS installer on Windows)
-```
-
-## Run in a browser (alternative)
-
-`getDisplayMedia` / `getUserMedia` need a *secure context*, so serve over
-`localhost` (a plain `file://` open won't get camera/screen permission):
-
-```bash
-python3 -m http.server 8000
-```
-
-Open http://localhost:8000 in **Chrome**. Note: native mouse-follow needs the
-Electron app; the browser falls back to motion-based follow.
+The app is not notarized yet: on first launch, right-click `Incrust.app` →
+**Open**. On macOS Sequoia: System Settings → Privacy & Security → **Open
+Anyway**.
 
 ## Use
 
-1. **Start capture** → pick the screen or window to share, allow the webcam + mic.
-2. Adjust position / size / edge smoothing / shadow live in the sidebar.
-3. **Record** → **Stop & save** downloads a `.webm`.
+1. **START** → pick the screen or window to share, allow webcam + mic.
+2. Adjust live on the preview: **drag** the bubble anywhere, **scroll** on it to
+   resize, pick a frame (screen / 16:9 / 9:16 / 1:1), zoom, follow the cursor.
+   Webcam/mic devices live behind the gear button.
+3. **REC** → press again to stop: a ready-to-publish `.mp4` lands where you
+   choose.
 
-### Output format
+Records straight to **MP4 (H.264/AAC)** — opens directly in QuickTime, Final
+Cut, Premiere, iMovie. If the runtime can only record WebM, the app
+auto-converts to MP4 via ffmpeg.wasm before saving (needs internet on first use
+to fetch the wasm core).
 
-Records straight to **MP4 (H.264/AAC)** when the browser supports it (current
-Chrome on macOS does) — opens directly in QuickTime, Final Cut, Premiere, iMovie.
+## Develop
 
-If the browser can only record WebM, the app **auto-converts to MP4 in-browser**
-via ffmpeg.wasm before download (needs internet on first use to fetch the wasm
-core; conversion of long clips can take a while). Either way you get an `.mp4`.
+```bash
+npm install
+npm start       # native Incrust window, permissions wired up
+npm run dist    # package → dist/Incrust-arm64.dmg
+```
+
+The marketing site lives in [`landing/`](landing) (Next.js):
+
+```bash
+cd landing && npm install && npm run dev
+```
 
 ## Notes
 
-- First macOS run: grant **Screen Recording** + **Camera** + **Microphone** to your
-  browser in System Settings → Privacy & Security (relaunch the browser after).
 - Segmentation runs on the GPU in real time; `modelSelection: 1` in `app.js` is
-  tuned for sitting at a desk.
-- The detourage works best with even lighting and contrast between you and your
-  background — no green screen required, but it helps the edges.
+  tuned for sitting at a desk. Even lighting helps the edges.
+- MediaPipe is loaded from a CDN — the bubble needs internet the first time.
+- Native mouse-follow needs the Electron app; in a plain browser it falls back
+  to motion-based follow.
+
+### Future work
+
+- Notarize the macOS build (Developer ID + `notarize` in electron-builder) to
+  remove the Gatekeeper first-open friction.
+- Windows build (`nsis` target is already configured).
+- Bundle MediaPipe + ffmpeg.wasm for fully offline use.
