@@ -7,14 +7,15 @@
   <title>Incrust</title>
   <style>
     :root {
-      --bg:      #d6d3ca;   /* warm taupe */
-      --panel:   #e7e4dc;   /* card */
-      --panel-2: #efece5;   /* lighter card */
+      --bg:      #d8d5cc;   /* warm taupe */
+      --panel:   #e9e6de;   /* card */
+      --panel-2: #f2efe8;   /* lighter card / inset track */
       --ink:     #14130d;   /* near-black */
-      --muted:   #9a978d;   /* grey text */
-      --line:    #c7c3b8;   /* hairlines / inactive track */
+      --muted:   #8f8c81;   /* grey text */
+      --line:    #c6c2b6;   /* hairlines / inactive track */
       --accent:  #f2c500;   /* signal yellow */
       --rec:     #e5484d;   /* record red */
+      --stage:   #17160f;   /* dark screening room */
     }
     * { box-sizing: border-box; }
     html, body { height: 100%; }
@@ -34,6 +35,13 @@
       -webkit-font-smoothing: antialiased;
     }
 
+    /* frameless macOS window (hiddenInset) — the top strip drags the window */
+    .drag-strip {
+      position: fixed; top: 0; left: 0; right: 0; height: 38px;
+      -webkit-app-region: drag;
+      z-index: 50;
+    }
+
     /* ---------- Sidebar ---------- */
     /* Sidebar = fixed header (title) + scrolling card list + fixed footer
        (transport). Only the middle scrolls, so the actions never cover the
@@ -41,14 +49,14 @@
     .sidebar {
       width: 340px;
       flex-shrink: 0;
-      padding: 22px 18px 16px;
+      padding: 44px 18px 16px;   /* top clears the macOS traffic lights */
       display: flex;
       flex-direction: column;
       gap: 12px;
       overflow: hidden;
       background: var(--bg);
     }
-    .sidebar-head { flex-shrink: 0; }
+    .sidebar-head { flex-shrink: 0; -webkit-app-region: drag; }
     .sidebar-scroll {
       flex: 1; min-height: 0;
       display: flex; flex-direction: column; gap: 12px;
@@ -73,6 +81,10 @@
       font-size: 11px; font-weight: 700; letter-spacing: .14em;
       text-transform: uppercase; color: var(--muted);
     }
+    .brand::before {
+      content: ''; width: 9px; height: 9px; border-radius: 3px;
+      background: var(--accent); box-shadow: 0 1px 3px rgba(20,19,13,.2);
+    }
     h1 {
       margin: 4px 0 8px;
       font-size: 34px; font-weight: 800; line-height: .96; letter-spacing: -.025em;
@@ -81,13 +93,20 @@
 
     .card {
       background: var(--panel);
-      border: 1px solid rgba(20,19,13,.05);
+      border: 1px solid rgba(20,19,13,.06);
       border-radius: 18px;
-      padding: 15px 16px;
-      display: flex; flex-direction: column; gap: 12px;
-      box-shadow: 0 1px 2px rgba(20,19,13,.03), 0 6px 18px rgba(20,19,13,.04);
+      padding: 14px 16px 15px;
+      display: flex; flex-direction: column; gap: 11px;
+      box-shadow: 0 1px 2px rgba(20,19,13,.03), 0 6px 18px rgba(20,19,13,.05);
     }
-    .card.tight { gap: 10px; }
+    .card-title {
+      display: flex; align-items: baseline; gap: 8px;
+      font-size: 10px; font-weight: 800; letter-spacing: .16em;
+      text-transform: uppercase; color: var(--ink);
+      padding-bottom: 9px; margin-bottom: 1px;
+      border-bottom: 1px solid rgba(20,19,13,.07);
+    }
+    .card-title .idx { color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 700; }
     label.lbl {
       font-size: 10px; font-weight: 700; letter-spacing: .12em;
       text-transform: uppercase; color: var(--muted);
@@ -102,38 +121,40 @@
       width: 100%;
       background-color: var(--panel-2);
       color: var(--ink);
-      border: 1px solid transparent;
-      border-radius: 13px;
-      padding: 12px 14px;
+      border: 1px solid rgba(20,19,13,.06);
+      border-radius: 12px;
+      padding: 11px 32px 11px 13px;
       font-size: 13px; font-weight: 600;
       cursor: pointer;
-      transition: border-color .15s ease, background-color .15s ease;
+      transition: border-color .15s ease, background-color .15s ease, box-shadow .15s ease;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2314130d' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
       background-repeat: no-repeat;
-      background-position: right 14px center;
+      background-position: right 13px center;
+      text-overflow: ellipsis; white-space: nowrap; overflow: hidden;
     }
-    select:hover { border-color: var(--line); }
+    select:hover { border-color: var(--line); background-color: #f6f4ee; box-shadow: 0 2px 8px rgba(20,19,13,.06); }
 
     /* segmented control — one inset track with a sliding-pill active state */
     .seg {
       display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px;
       background: var(--panel-2);
-      padding: 3px; border-radius: 13px;
+      padding: 3px; border-radius: 12px;
+      box-shadow: inset 0 1px 2px rgba(20,19,13,.05);
     }
     .seg button {
       background: transparent;
       color: var(--muted);
       border: none;
-      border-radius: 10px;
+      border-radius: 9px;
       padding: 9px 4px;
       font-size: 11px; font-weight: 700;
       cursor: pointer;
       transition: color .15s ease, background .15s ease, box-shadow .15s ease;
     }
-    .seg button:hover { color: var(--ink); }
+    .seg button:hover { color: var(--ink); background: rgba(20,19,13,.05); }
     .seg button.active {
       background: var(--ink); color: #fff;
-      box-shadow: 0 1px 4px rgba(20,19,13,.25);
+      box-shadow: 0 2px 6px rgba(20,19,13,.3);
     }
 
     /* range sliders — track fills to the thumb (progress), set via --fill in JS */
@@ -145,7 +166,7 @@
     }
     input[type=range]::-webkit-slider-thumb {
       -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%;
-      background: var(--ink); border: 3px solid var(--panel);
+      background: var(--ink); border: 3px solid var(--panel-2);
       box-shadow: 0 1px 4px rgba(0,0,0,.3);
       transition: transform .12s ease, box-shadow .2s ease;
     }
@@ -162,17 +183,18 @@
     .toggle span { font-size: 13px; font-weight: 600; }
     input[type=checkbox] {
       -webkit-appearance: none; appearance: none;
-      width: 46px; height: 27px; border-radius: 99px;
+      width: 44px; height: 26px; border-radius: 99px;
       background: var(--line); position: relative; cursor: pointer;
       transition: background .2s ease; flex-shrink: 0;
+      box-shadow: inset 0 1px 2px rgba(20,19,13,.12);
     }
     input[type=checkbox]::after {
       content: ''; position: absolute; top: 3px; left: 3px;
-      width: 21px; height: 21px; border-radius: 50%; background: #fff;
+      width: 20px; height: 20px; border-radius: 50%; background: #fff;
       box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform .2s ease;
     }
-    input[type=checkbox]:checked { background: var(--ink); }
-    input[type=checkbox]:checked::after { transform: translateX(19px); }
+    input[type=checkbox]:checked { background: var(--ink); box-shadow: none; }
+    input[type=checkbox]:checked::after { transform: translateX(18px); }
 
     /* transport — pinned to the bottom of the sidebar, clear primary/secondary
        hierarchy: Start (accent) leads, Record (ink) follows once live. */
@@ -185,12 +207,12 @@
     .btn-row { display: grid; grid-template-columns: 1.25fr 1fr; gap: 10px; }
     .btn {
       display: flex; align-items: center; justify-content: center; gap: 9px;
-      height: 58px; border: none; border-radius: 17px; cursor: pointer;
+      height: 56px; border: none; border-radius: 16px; cursor: pointer;
       font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
       transition: transform .12s ease, box-shadow .2s ease, filter .2s ease;
-      box-shadow: 0 6px 16px rgba(0,0,0,.14);
+      box-shadow: 0 6px 16px rgba(20,19,13,.16);
     }
-    .btn:hover { transform: translateY(-1px); box-shadow: 0 10px 24px rgba(0,0,0,.22); }
+    .btn:hover { transform: translateY(-1px); box-shadow: 0 10px 24px rgba(20,19,13,.24); }
     .btn:active { transform: scale(.98); }
     .btn:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; transform: none; }
     .btn .glyph { font-size: 19px; line-height: 1; }
@@ -205,38 +227,54 @@
     .status {
       display: flex; align-items: center; gap: 8px;
       font-size: 12px; font-weight: 600; color: var(--muted);
-      background: var(--panel); border-radius: 13px; padding: 11px 14px;
+      background: var(--panel); border: 1px solid rgba(20,19,13,.06);
+      border-radius: 12px; padding: 10px 13px;
     }
     .status .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
-    .status .dot.live { background: #29b56a; }
+    .status .dot.live { background: #29b56a; box-shadow: 0 0 0 3px rgba(41,181,106,.18); }
     .status .dot.rec  { background: var(--rec); animation: pulse 1s infinite; }
     @keyframes pulse { 50% { opacity: .25; } }
     .reset { background: none; border: none; color: var(--muted); font-size: 11px; font-weight: 600; cursor: pointer; text-decoration: underline; align-self: center; padding: 2px; }
     .reset:hover { color: var(--ink); }
 
-    /* ---------- Stage ---------- */
+    /* ---------- Stage — a dark screening room so the preview pops ---------- */
     .stage {
       flex: 1; min-width: 0; min-height: 0;
       display: grid; grid-template: 1fr / 1fr; /* one cell */
       place-items: center;
-      padding: 16px;
+      margin: 14px 14px 14px 0;
+      padding: 24px;
+      border-radius: 26px;
+      position: relative;
+      overflow: hidden;
       background:
-        radial-gradient(circle at 50% 38%, #e2dfd7 0%, var(--bg) 70%);
+        radial-gradient(120% 90% at 50% 0%, #26241b 0%, var(--stage) 62%);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.05),
+        inset 0 0 0 1px rgba(255,255,255,.03),
+        0 18px 50px rgba(20,19,13,.18);
+    }
+    /* faint dot grid, like a studio pegboard */
+    .stage::before {
+      content: ''; position: absolute; inset: 0;
+      background-image: radial-gradient(rgba(255,255,255,.05) 1px, transparent 1.4px);
+      background-size: 22px 22px;
+      pointer-events: none;
     }
     .stage > * { grid-area: 1 / 1; } /* stack placeholder + preview in same cell */
-    .placeholder { text-align: center; color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: 26px; }
+    .placeholder { text-align: center; color: #8f8c81; display: flex; flex-direction: column; align-items: center; gap: 26px; position: relative; }
     .grille {
       width: 190px; height: 190px; border-radius: 50%;
-      background-image: radial-gradient(var(--ink) 22%, transparent 23%);
+      background-image: radial-gradient(rgba(242,197,0,.8) 22%, transparent 23%);
       background-size: 14px 14px; background-position: center;
-      opacity: .85;
+      opacity: .8;
       -webkit-mask-image: radial-gradient(circle at center, #000 62%, transparent 66%);
               mask-image: radial-gradient(circle at center, #000 62%, transparent 66%);
       animation: breathe 3.4s ease-in-out infinite;
     }
-    @keyframes breathe { 50% { opacity: .45; transform: scale(.97); } }
+    @keyframes breathe { 50% { opacity: .4; transform: scale(.97); } }
     .placeholder p { font-size: 14px; font-weight: 500; max-width: 280px; line-height: 1.5; }
-    .placeholder strong { color: var(--ink); }
+    .placeholder strong { color: var(--accent); }
 
     /* preview + overlays — the wrap fills the whole stage cell and the canvas
        grows to fill it while keeping its aspect ratio, so the preview tracks
@@ -246,6 +284,7 @@
       min-width: 0; min-height: 0;
       display: flex; align-items: center; justify-content: center;
       line-height: 0;
+      position: relative;
     }
     /* shrink-wraps the canvas so the overlay badges anchor to the video edges */
     .preview-frame {
@@ -257,8 +296,10 @@
       display: block;
       max-width: 100%; max-height: 100%; width: auto; height: auto;
       object-fit: contain;
-      border-radius: 16px;
-      box-shadow: 0 24px 70px rgba(0,0,0,.3);
+      border-radius: 14px;
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,.08),
+        0 30px 80px rgba(0,0,0,.55);
       background: #000;
     }
     .chip, .rec-badge {
@@ -270,12 +311,13 @@
       backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
       font-variant-numeric: tabular-nums;
     }
-    .chip { left: 14px; background: rgba(20,19,13,.55); color: #fff; }
-    .rec-badge { right: 14px; background: rgba(229,72,77,.92); color: #fff; }
+    .chip { left: 14px; background: rgba(20,19,13,.6); color: #fff; box-shadow: 0 0 0 1px rgba(255,255,255,.1); }
+    .rec-badge { right: 14px; background: rgba(229,72,77,.92); color: #fff; box-shadow: 0 4px 14px rgba(229,72,77,.4); }
     .rec-dot { width: 9px; height: 9px; border-radius: 50%; background: #fff; animation: pulse 1s infinite; }
   </style>
 </head>
 <body>
+  <div class="drag-strip"></div>
   <aside class="sidebar">
     <div class="sidebar-head">
       <div class="brand">Screen Recorder</div>
@@ -283,7 +325,8 @@
     </div>
 
     <div class="sidebar-scroll">
-    <div class="card tight">
+    <div class="card">
+      <div class="card-title"><span class="idx">01</span>Sources</div>
       <div>
         <label class="lbl" for="camSelect">Webcam</label>
         <select id="camSelect"></select>
@@ -294,8 +337,8 @@
       </div>
     </div>
 
-    <div class="card tight">
-      <label class="lbl">Output format</label>
+    <div class="card">
+      <div class="card-title"><span class="idx">02</span>Framing</div>
       <div class="seg" id="formatSeg">
         <button data-fmt="match" class="active">Screen</button>
         <button data-fmt="landscape">16:9</button>
@@ -308,8 +351,8 @@
       <div class="hint" id="cropHint">Tip: drag the preview background to choose which part of the screen to frame.</div>
     </div>
 
-    <div class="card tight">
-      <label class="lbl">Camera position <span class="hint">drag on preview ✋</span></label>
+    <div class="card">
+      <div class="card-title"><span class="idx">03</span>Camera overlay <span class="hint" style="margin-left:auto;">drag on preview ✋</span></div>
       <div class="seg" id="posSeg">
         <button data-pos="bl" class="active">BL</button>
         <button data-pos="br">BR</button>
@@ -322,7 +365,8 @@
       <input type="range" id="featherRange" min="0" max="12" value="3" />
     </div>
 
-    <div class="card tight">
+    <div class="card">
+      <div class="card-title"><span class="idx">04</span>Look</div>
       <div>
         <label class="lbl" for="effectSelect">Webcam effect</label>
         <select id="effectSelect">
@@ -370,6 +414,19 @@
       </div>
     </div>
   </main>
+
+  <!-- Mask refinement filter used by the compositor (app.js). Chain:
+       1. blur softens the raw segmentation edge so the threshold can bite,
+       2. feFuncA linear (slope 4, midpoint ~0.62) chokes the edge INWARD —
+          removing the background halo — and hardens ghosty low-confidence alpha,
+       3. final blur re-feathers; its stdDeviation tracks the Edge smoothing slider. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <filter id="maskRefine" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="3" />
+      <feComponentTransfer><feFuncA type="linear" slope="4" intercept="-1.98" /></feComponentTransfer>
+      <feGaussianBlur id="maskFeather" stdDeviation="3" />
+    </filter>
+  </svg>
 
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
   <script src="app.js"></script>

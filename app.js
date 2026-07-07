@@ -74,12 +74,30 @@ function onceLoaded(video) {
 }
 
 // --- MediaPipe Selfie Segmentation -------------------------------------------
-let latestMask = null; // ImageBitmap-like canvas/image of the segmentation mask
+// Masks are EMA-blended into an accumulator canvas before use: this temporal
+// smoothing kills the frame-to-frame edge flicker ("boiling") of raw masks.
+// acc = acc*(1-k) + mask*k, done with canvas compositing: a 'copy' self-draw
+// at alpha (1-k) fades the accumulator, then 'lighter' adds the new mask at k.
+const maskAcc = document.createElement('canvas');
+const maskAccCtx = maskAcc.getContext('2d');
+const MASK_SMOOTH = 0.65; // weight of the newest mask (1 = no smoothing)
+let latestMask = null;    // the smoothed mask canvas, or null before first frame
 const segmenter = new SelfieSegmentation({
   locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${f}`,
 });
 segmenter.setOptions({ modelSelection: 1 }); // 1 = general model, best for sitting at a desk
-segmenter.onResults((results) => { latestMask = results.segmentationMask; });
+segmenter.onResults((results) => {
+  if (!maskAcc.width) return; // sized on Start once the cam reports dimensions
+  maskAccCtx.globalCompositeOperation = 'copy';    // acc *= (1 - k)
+  maskAccCtx.globalAlpha = 1 - MASK_SMOOTH;
+  maskAccCtx.drawImage(maskAcc, 0, 0);
+  maskAccCtx.globalCompositeOperation = 'lighter'; // acc += mask * k
+  maskAccCtx.globalAlpha = MASK_SMOOTH;
+  maskAccCtx.drawImage(results.segmentationMask, 0, 0, maskAcc.width, maskAcc.height);
+  maskAccCtx.globalCompositeOperation = 'source-over';
+  maskAccCtx.globalAlpha = 1;
+  latestMask = maskAcc;
+});
 
 // --- Settings persistence ----------------------------------------------------
 const STORAGE_KEY = 'screen-cam-merge:settings';
@@ -118,6 +136,7 @@ function loadSettings() {
   els.sizeVal.textContent = els.sizeRange.value + '%';
   els.featherRange.value = state.feather;
   els.featherVal.textContent = state.feather;
+  syncFeatherFilter(); // restored feather must reach the SVG filter too
   els.zoomRange.value = Math.round(state.zoom * 100);
   els.zoomVal.textContent = state.zoom.toFixed(1) + '×';
   els.followToggle.checked = state.follow;
@@ -249,9 +268,15 @@ els.sizeRange.addEventListener('input', () => {
   els.sizeVal.textContent = els.sizeRange.value + '%';
   saveSettings();
 });
+// The slider drives the final re-feather blur inside the #maskRefine filter.
+function syncFeatherFilter() {
+  const f = document.getElementById('maskFeather');
+  if (f) f.setAttribute('stdDeviation', state.feather);
+}
 els.featherRange.addEventListener('input', () => {
   state.feather = +els.featherRange.value;
   els.featherVal.textContent = state.feather;
+  syncFeatherFilter();
   saveSettings();
 });
 els.effectSelect.addEventListener('change', () => { state.effect = els.effectSelect.value; saveSettings(); });
@@ -316,6 +341,9 @@ els.startBtn.addEventListener('click', async () => {
     els.preview.height = screenVideo.videoHeight;
     personCanvas.width = camVideo.videoWidth;
     personCanvas.height = camVideo.videoHeight;
+    maskAcc.width = camVideo.videoWidth;   // also clears any stale mask
+    maskAcc.height = camVideo.videoHeight;
+    latestMask = null;
 
     els.placeholder.style.display = 'none';
     els.preview.style.display = 'block';
@@ -444,8 +472,13 @@ function render() {
     const cw = personCanvas.width, ch = personCanvas.height;
     personCtx.clearRect(0, 0, cw, ch);
     // Draw mask, then keep only webcam pixels where the mask is opaque.
+    // The #maskRefine SVG filter chokes the edge inward (no background halo),
+    // hardens ghosty alpha, and re-feathers. Fallback: plain outward blur.
     personCtx.save();
-    if (state.feather > 0) personCtx.filter = `blur(${state.feather}px)`;
+    personCtx.filter = 'url(#maskRefine)';
+    if (!personCtx.filter || personCtx.filter === 'none') {
+      if (state.feather > 0) personCtx.filter = `blur(${state.feather}px)`;
+    }
     personCtx.drawImage(latestMask, 0, 0, cw, ch);
     personCtx.filter = 'none';
     personCtx.globalCompositeOperation = 'source-in';

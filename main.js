@@ -11,7 +11,12 @@ function createWindow() {
     height: 820,
     minWidth: 900,
     minHeight: 600,
-    backgroundColor: '#d6d3ca',
+    backgroundColor: '#d8d5cc',
+    // Frameless-look title bar on macOS: traffic lights float over the page
+    // (the page provides a top drag strip). Ignored on other platforms.
+    ...(process.platform === 'darwin'
+      ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 14 } }
+      : {}),
     title: 'Incrust',
     icon: path.join(__dirname, 'build', 'icon.png'),
     webPreferences: {
