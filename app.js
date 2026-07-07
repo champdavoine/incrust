@@ -1,21 +1,17 @@
-// Screen + Cam Merge — capture screen, cut webcam background, composite, record.
+// Incrust — capture screen, cut webcam background, composite, record.
 
 const els = {
   camSelect: document.getElementById('camSelect'),
   micSelect: document.getElementById('micSelect'),
-  posSeg: document.getElementById('posSeg'),
-  sizeRange: document.getElementById('sizeRange'),
-  sizeVal: document.getElementById('sizeVal'),
-  featherRange: document.getElementById('featherRange'),
-  featherVal: document.getElementById('featherVal'),
   formatSeg: document.getElementById('formatSeg'),
   zoomRange: document.getElementById('zoomRange'),
   zoomVal: document.getElementById('zoomVal'),
   followToggle: document.getElementById('followToggle'),
-  effectSelect: document.getElementById('effectSelect'),
-  mirrorToggle: document.getElementById('mirrorToggle'),
-  shadowToggle: document.getElementById('shadowToggle'),
-  persistToggle: document.getElementById('persistToggle'),
+  settingsBtn: document.getElementById('settingsBtn'),
+  settingsPopover: document.getElementById('settingsPopover'),
+  bigTimer: document.getElementById('bigTimer'),
+  meter: document.getElementById('meter'),
+  sizeChip: document.getElementById('sizeChip'),
   resetBtn: document.getElementById('resetBtn'),
   startBtn: document.getElementById('startBtn'),
   startGlyph: document.getElementById('startGlyph'),
@@ -42,10 +38,6 @@ const state = {
   followTarget: null,
   view: { fracW: 1, fracH: 1 }, // visible fraction of source (set each frame)
   size: 0.28,        // camera height as fraction of canvas height
-  feather: 3,
-  effect: 'none',
-  mirror: true,
-  shadow: true,
   screenStream: null,
   camStream: null,
   micStream: null,
@@ -103,12 +95,10 @@ segmenter.onResults((results) => {
 const STORAGE_KEY = 'screen-cam-merge:settings';
 
 function saveSettings() {
-  if (!els.persistToggle.checked) { localStorage.removeItem(STORAGE_KEY); return; }
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
-      pos: state.pos, custom: state.custom, size: state.size, feather: state.feather,
+      pos: state.pos, custom: state.custom, size: state.size,
       format: state.format, zoom: state.zoom, pan: state.pan, follow: state.follow,
-      effect: state.effect, mirror: state.mirror, shadow: state.shadow,
       camId: els.camSelect.value, micId: els.micSelect.value,
     }));
   } catch (_) {}
@@ -120,31 +110,18 @@ function loadSettings() {
   if (!data) return;
   state.pos = data.pos ?? state.pos;
   state.custom = data.custom ?? null;
-  state.size = data.size ?? state.size;
-  state.feather = data.feather ?? state.feather;
+  // Clamp: stores written by older versions may hold out-of-range sizes.
+  state.size = Math.min(0.55, Math.max(0.12, data.size ?? state.size));
   state.format = data.format ?? state.format;
   state.zoom = data.zoom ?? state.zoom;
   state.pan = data.pan ?? state.pan;
   state.follow = data.follow ?? state.follow;
-  state.effect = data.effect ?? state.effect;
-  state.mirror = data.mirror ?? state.mirror;
-  state.shadow = data.shadow ?? state.shadow;
   state.savedCamId = data.camId || '';
   state.savedMicId = data.micId || '';
   // Reflect into the controls.
-  els.sizeRange.value = Math.round(state.size * 100);
-  els.sizeVal.textContent = els.sizeRange.value + '%';
-  els.featherRange.value = state.feather;
-  els.featherVal.textContent = state.feather;
-  syncFeatherFilter(); // restored feather must reach the SVG filter too
   els.zoomRange.value = Math.round(state.zoom * 100);
   els.zoomVal.textContent = state.zoom.toFixed(1) + '×';
   els.followToggle.checked = state.follow;
-  els.effectSelect.value = state.effect;
-  els.mirrorToggle.checked = state.mirror;
-  els.shadowToggle.checked = state.shadow;
-  els.posSeg.querySelectorAll('button').forEach(b =>
-    b.classList.toggle('active', !state.custom && b.dataset.pos === state.pos));
   els.formatSeg.querySelectorAll('button').forEach(b =>
     b.classList.toggle('active', b.dataset.fmt === state.format));
 }
@@ -171,16 +148,6 @@ function fill(sel, devices, label) {
 }
 
 // --- UI wiring ---------------------------------------------------------------
-els.posSeg.addEventListener('click', (e) => {
-  const btn = e.target.closest('button');
-  if (!btn) return;
-  els.posSeg.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  state.pos = btn.dataset.pos;
-  state.custom = null; // snapping to a corner clears the custom position
-  saveSettings();
-});
-
 els.formatSeg.addEventListener('click', (e) => {
   const btn = e.target.closest('button');
   if (!btn) return;
@@ -229,7 +196,6 @@ els.preview.addEventListener('pointerdown', (e) => {
     drag = { dx: p.x - (c.x + c.w / 2), dy: p.y - (c.y + c.h / 2) };
     els.preview.setPointerCapture(e.pointerId);
     els.preview.style.cursor = 'grabbing';
-    els.posSeg.querySelectorAll('button').forEach(b => b.classList.remove('active'));
   } else if (cropActive() && !state.follow) { // grab the background → pan the frame
     panDrag = { startX: p.x, startY: p.y, panX: state.pan.x, panY: state.pan.y };
     els.preview.setPointerCapture(e.pointerId);
@@ -263,43 +229,54 @@ function endDrag(e) {
 }
 els.preview.addEventListener('pointerup', endDrag);
 els.preview.addEventListener('pointercancel', endDrag);
-els.sizeRange.addEventListener('input', () => {
-  state.size = els.sizeRange.value / 100;
-  els.sizeVal.textContent = els.sizeRange.value + '%';
-  saveSettings();
-});
-// The slider drives the final re-feather blur inside the #maskRefine filter.
-function syncFeatherFilter() {
-  const f = document.getElementById('maskFeather');
-  if (f) f.setAttribute('stdDeviation', state.feather);
-}
-els.featherRange.addEventListener('input', () => {
-  state.feather = +els.featherRange.value;
-  els.featherVal.textContent = state.feather;
-  syncFeatherFilter();
-  saveSettings();
-});
-els.effectSelect.addEventListener('change', () => { state.effect = els.effectSelect.value; saveSettings(); });
-els.mirrorToggle.addEventListener('change', () => { state.mirror = els.mirrorToggle.checked; saveSettings(); });
-els.shadowToggle.addEventListener('change', () => { state.shadow = els.shadowToggle.checked; saveSettings(); });
+// Scroll (or pinch — Chromium reports macOS pinch as wheel + ctrlKey) over the
+// bubble resizes it. Center-anchored for free: state.custom stores the CENTER.
+let sizeChipTimer = null, sizeSaveTimer = null;
+els.preview.addEventListener('wheel', (e) => {
+  const p = canvasPoint(e);
+  if (!overCam(p)) return;
+  e.preventDefault();
+  const k = e.ctrlKey ? 0.01 : 0.002;
+  state.size = Math.min(0.55, Math.max(0.12, state.size * Math.exp(-e.deltaY * k)));
+
+  // Transient chip near the bubble center, in CSS px within .preview-frame.
+  const c = state.camRect;
+  if (c) {
+    const r = els.preview.getBoundingClientRect();
+    els.sizeChip.style.left = ((c.x + c.w / 2) * (r.width / els.preview.width)) + 'px';
+    els.sizeChip.style.top = ((c.y + c.h / 2) * (r.height / els.preview.height)) + 'px';
+    els.sizeChip.textContent = Math.round(state.size * 100) + '%';
+    els.sizeChip.classList.add('visible');
+  }
+  clearTimeout(sizeChipTimer);
+  sizeChipTimer = setTimeout(() => els.sizeChip.classList.remove('visible'), 800);
+  clearTimeout(sizeSaveTimer);
+  sizeSaveTimer = setTimeout(saveSettings, 300);
+}, { passive: false }); // passive:false or preventDefault is ignored
+
 els.camSelect.addEventListener('change', saveSettings);
 els.micSelect.addEventListener('change', saveSettings);
-els.persistToggle.addEventListener('change', saveSettings);
 els.resetBtn.addEventListener('click', () => {
   localStorage.removeItem(STORAGE_KEY);
   location.reload();
 });
 
-// CSS-style filter strings used to color-grade the webcam cutout.
-const EFFECTS = {
-  none: 'none',
-  bw: 'grayscale(1)',
-  sepia: 'sepia(0.85)',
-  vintage: 'sepia(0.5) contrast(1.15) saturate(1.3)',
-  cool: 'saturate(1.2) hue-rotate(-18deg)',
-  warm: 'sepia(0.3) saturate(1.4) hue-rotate(-12deg)',
-  invert: 'invert(1)',
-};
+// --- Settings popover (devices) -----------------------------------------------
+function setPopover(open) {
+  els.settingsPopover.hidden = !open;
+  els.settingsBtn.setAttribute('aria-expanded', String(open));
+  if (open) els.camSelect.focus();
+}
+els.settingsBtn.addEventListener('click', () =>
+  setPopover(els.settingsPopover.hidden));
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !els.settingsPopover.hidden) setPopover(false);
+});
+document.addEventListener('pointerdown', (e) => {
+  if (els.settingsPopover.hidden) return;
+  if (els.settingsPopover.contains(e.target) || els.settingsBtn.contains(e.target)) return;
+  setPopover(false);
+});
 
 function setStatus(text, kind = '') {
   els.status.innerHTML = `<span class="dot ${kind}"></span>${text}`;
@@ -350,9 +327,11 @@ els.startBtn.addEventListener('click', async () => {
     els.resChip.style.display = 'flex';
     state.running = true;
     els.startGlyph.textContent = '■';
-    els.startLabel.textContent = 'Stop';
+    els.startGlyph.classList.add('square');
+    els.startLabel.textContent = 'STOP';
     els.recBtn.disabled = false;
     setStatus('Live preview running.', 'live');
+    startMeter();
     pump();
     requestAnimationFrame(render);
   } catch (err) {
@@ -477,7 +456,7 @@ function render() {
     personCtx.save();
     personCtx.filter = 'url(#maskRefine)';
     if (!personCtx.filter || personCtx.filter === 'none') {
-      if (state.feather > 0) personCtx.filter = `blur(${state.feather}px)`;
+      personCtx.filter = 'blur(3px)'; // fallback if SVG filters are unavailable
     }
     personCtx.drawImage(latestMask, 0, 0, cw, ch);
     personCtx.filter = 'none';
@@ -506,21 +485,13 @@ function render() {
     state.camRect = { x, y, w: camW, h: camH }; // for hit-testing drags
 
     ctx.save();
-    if (state.shadow) {
-      ctx.shadowColor = 'rgba(0,0,0,0.45)';
-      ctx.shadowBlur = H * 0.025;
-      ctx.shadowOffsetY = H * 0.008;
-    }
-    const filter = EFFECTS[state.effect] || 'none';
-    if (filter !== 'none') ctx.filter = filter;
-    if (state.mirror) {
-      // Flip horizontally around the camera's own center.
-      ctx.translate(x + camW, y);
-      ctx.scale(-1, 1);
-      ctx.drawImage(personCanvas, 0, 0, camW, camH);
-    } else {
-      ctx.drawImage(personCanvas, x, y, camW, camH);
-    }
+    ctx.shadowColor = 'rgba(0,0,0,0.45)';
+    ctx.shadowBlur = H * 0.025;
+    ctx.shadowOffsetY = H * 0.008;
+    // Mirror the bubble (selfie view) — flip around the camera's own center.
+    ctx.translate(x + camW, y);
+    ctx.scale(-1, 1);
+    ctx.drawImage(personCanvas, 0, 0, camW, camH);
     ctx.restore();
   }
 
@@ -564,20 +535,33 @@ els.recBtn.addEventListener('click', () => {
   state.recorder.onstop = saveRecording;
   state.recorder.start();
   els.recBtn.classList.add('recording');
+  document.body.classList.add('recording');
   els.recGlyph.textContent = '■';
-  els.recLabel.textContent = 'Stop';
+  els.recGlyph.classList.add('square');
   setStatus('Recording…', 'rec');
 
-  // Recording badge + elapsed timer over the preview.
+  // Elapsed time: small red badge over the preview + the big console timer.
   els.recBadge.style.display = 'flex';
   state.recStart = performance.now();
   els.recTime.textContent = '00:00';
+  setBigTimer(0);
   state.recTimer = setInterval(() => {
     const s = Math.floor((performance.now() - state.recStart) / 1000);
     els.recTime.textContent =
       `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+    setBigTimer(s);
   }, 250);
 });
+
+// Big console timer — HH:MM:SS, the hour segment stays dim until it matters.
+function setBigTimer(totalSeconds) {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  const pad = (n) => String(n).padStart(2, '0');
+  els.bigTimer.querySelector('.digits').innerHTML =
+    `<span class="${h ? '' : 'dim'}">${pad(h)}:</span>${pad(m)}:${pad(s)}`;
+}
 
 function stopRecTimer() {
   clearInterval(state.recTimer);
@@ -588,8 +572,10 @@ function stopRecTimer() {
 async function saveRecording() {
   stopRecTimer();
   els.recBtn.classList.remove('recording');
+  document.body.classList.remove('recording');
   els.recGlyph.textContent = '●';
-  els.recLabel.textContent = 'Record';
+  els.recGlyph.classList.remove('square');
+  els.recLabel.textContent = 'REC';
 
   const isMp4 = (state.recMime || '').startsWith('video/mp4');
   let blob = new Blob(state.chunks, { type: isMp4 ? 'video/mp4' : 'video/webm' });
@@ -656,6 +642,48 @@ async function webmToMp4(webmBlob) {
   return new Blob([data.buffer], { type: 'video/mp4' });
 }
 
+// --- Mic level meter -----------------------------------------------------------
+// 21 bars, symmetric around the vertical middle (scaleY on full-height bars).
+const METER_BARS = 21;
+for (let i = 0; i < METER_BARS; i++) els.meter.appendChild(document.createElement('i'));
+const meterBars = [...els.meter.children];
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+let audioCtx = null, meterRaf = 0;
+
+function startMeter() {
+  if (!state.micStream) return;
+  els.meter.classList.add('live');
+  if (reducedMotion.matches) { // static, honest "armed" look — no animation
+    meterBars.forEach((b, i) => { b.style.transform = `scaleY(${0.15 + 0.2 * Math.sin(i / 2)})`; });
+    return;
+  }
+  audioCtx = new AudioContext();
+  const analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 64;
+  analyser.smoothingTimeConstant = 0.7;
+  audioCtx.createMediaStreamSource(state.micStream).connect(analyser);
+  const bins = new Uint8Array(analyser.frequencyBinCount);
+  const tick = () => {
+    analyser.getByteFrequencyData(bins);
+    for (let i = 0; i < METER_BARS; i++) {
+      // Center bars read the low bins (voice energy), edges the high ones.
+      const bin = Math.abs(i - (METER_BARS - 1) / 2) / ((METER_BARS - 1) / 2);
+      const v = bins[Math.round(bin * (bins.length - 1))] / 255;
+      meterBars[i].style.transform = `scaleY(${Math.max(0.08, v)})`;
+    }
+    meterRaf = requestAnimationFrame(tick);
+  };
+  meterRaf = requestAnimationFrame(tick);
+}
+
+function stopMeter() {
+  cancelAnimationFrame(meterRaf);
+  meterRaf = 0;
+  if (audioCtx) { audioCtx.close().catch(() => {}); audioCtx = null; }
+  els.meter.classList.remove('live');
+  meterBars.forEach((b) => { b.style.transform = 'scaleY(0.08)'; });
+}
+
 // --- Teardown ----------------------------------------------------------------
 function stopAll() {
   state.running = false;
@@ -664,14 +692,18 @@ function stopAll() {
     s && s.getTracks().forEach(t => t.stop()));
   state.screenStream = state.camStream = state.micStream = null;
   stopRecTimer();
+  stopMeter();
   els.preview.style.display = 'none';
   els.resChip.style.display = 'none';
   els.placeholder.style.display = 'flex';
   els.startGlyph.textContent = '▶';
-  els.startLabel.textContent = 'Start';
+  els.startGlyph.classList.remove('square');
+  els.startLabel.textContent = 'START';
   els.recBtn.classList.remove('recording');
+  document.body.classList.remove('recording');
   els.recGlyph.textContent = '●';
-  els.recLabel.textContent = 'Record';
+  els.recGlyph.classList.remove('square');
+  els.recLabel.textContent = 'REC';
   els.recBtn.disabled = true;
   setStatus('Idle — press Start.');
 }

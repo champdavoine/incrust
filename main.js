@@ -9,9 +9,9 @@ function createWindow() {
   const win = new BrowserWindow({
     width: 1280,
     height: 820,
-    minWidth: 900,
+    minWidth: 980,
     minHeight: 600,
-    backgroundColor: '#d8d5cc',
+    backgroundColor: '#dcdad2',
     // Frameless-look title bar on macOS: traffic lights float over the page
     // (the page provides a top drag strip). Ignored on other platforms.
     ...(process.platform === 'darwin'

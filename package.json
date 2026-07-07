@@ -1,6 +1,6 @@
 {
   "name": "incrust",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Incrust — capture your screen + webcam, cut the background, composite the person over the screen, and record.",
   "main": "main.js",
   "scripts": {
@@ -11,7 +11,8 @@
   "build": {
     "appId": "com.champdavoine.incrust",
     "productName": "Incrust",
-    "files": ["main.js", "preload.js", "index.html", "app.js", "favicon.svg", "build/icon.png"],
+    "artifactName": "${productName}-${arch}.${ext}",
+    "files": ["main.js", "preload.js", "index.html", "app.js", "styles.css", "favicon.svg", "build/icon.png"],
     "afterPack": "./afterPack.js",
     "mac": {
       "category": "public.app-category.video",

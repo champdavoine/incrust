@@ -5,404 +5,71 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <title>Incrust</title>
-  <style>
-    :root {
-      --bg:      #d8d5cc;   /* warm taupe */
-      --panel:   #e9e6de;   /* card */
-      --panel-2: #f2efe8;   /* lighter card / inset track */
-      --ink:     #14130d;   /* near-black */
-      --muted:   #8f8c81;   /* grey text */
-      --line:    #c6c2b6;   /* hairlines / inactive track */
-      --accent:  #f2c500;   /* signal yellow */
-      --rec:     #e5484d;   /* record red */
-      --stage:   #17160f;   /* dark screening room */
-    }
-    * { box-sizing: border-box; }
-    html, body { height: 100%; }
-    /* keyboard focus ring — visible only for keyboard users, themed to the ink */
-    :focus { outline: none; }
-    button:focus-visible, select:focus-visible, input:focus-visible, .toggle:focus-within {
-      outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 10px;
-    }
-    body {
-      margin: 0;
-      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-      background: var(--bg);
-      color: var(--ink);
-      display: flex;
-      height: 100vh;
-      overflow: hidden;
-      -webkit-font-smoothing: antialiased;
-    }
-
-    /* frameless macOS window (hiddenInset) — the top strip drags the window */
-    .drag-strip {
-      position: fixed; top: 0; left: 0; right: 0; height: 38px;
-      -webkit-app-region: drag;
-      z-index: 50;
-    }
-
-    /* ---------- Sidebar ---------- */
-    /* Sidebar = fixed header (title) + scrolling card list + fixed footer
-       (transport). Only the middle scrolls, so the actions never cover the
-       controls and the title never leaves. */
-    .sidebar {
-      width: 340px;
-      flex-shrink: 0;
-      padding: 44px 18px 16px;   /* top clears the macOS traffic lights */
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      overflow: hidden;
-      background: var(--bg);
-    }
-    .sidebar-head { flex-shrink: 0; -webkit-app-region: drag; }
-    .sidebar-scroll {
-      flex: 1; min-height: 0;
-      display: flex; flex-direction: column; gap: 12px;
-      overflow-y: auto; overflow-x: hidden;
-      padding: 4px 8px 4px 0;
-      margin-right: -4px;
-      scrollbar-gutter: stable;
-    }
-    /* Soft, themed scrollbar — slim rounded pill in the taupe, darkens on
-       hover. The transparent border carves padding so it floats. */
-    .sidebar-scroll::-webkit-scrollbar { width: 12px; }
-    .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
-    .sidebar-scroll::-webkit-scrollbar-thumb {
-      background: var(--line);
-      border-radius: 99px;
-      border: 4px solid var(--bg);
-      background-clip: padding-box;
-    }
-    .sidebar-scroll::-webkit-scrollbar-thumb:hover { background: var(--muted); }
-    .brand {
-      display: flex; align-items: center; gap: 8px;
-      font-size: 11px; font-weight: 700; letter-spacing: .14em;
-      text-transform: uppercase; color: var(--muted);
-    }
-    .brand::before {
-      content: ''; width: 9px; height: 9px; border-radius: 3px;
-      background: var(--accent); box-shadow: 0 1px 3px rgba(20,19,13,.2);
-    }
-    h1 {
-      margin: 4px 0 8px;
-      font-size: 34px; font-weight: 800; line-height: .96; letter-spacing: -.025em;
-    }
-    h1 .sub { display: block; color: var(--muted); }
-
-    .card {
-      background: var(--panel);
-      border: 1px solid rgba(20,19,13,.06);
-      border-radius: 18px;
-      padding: 14px 16px 15px;
-      display: flex; flex-direction: column; gap: 11px;
-      box-shadow: 0 1px 2px rgba(20,19,13,.03), 0 6px 18px rgba(20,19,13,.05);
-    }
-    .card-title {
-      display: flex; align-items: baseline; gap: 8px;
-      font-size: 10px; font-weight: 800; letter-spacing: .16em;
-      text-transform: uppercase; color: var(--ink);
-      padding-bottom: 9px; margin-bottom: 1px;
-      border-bottom: 1px solid rgba(20,19,13,.07);
-    }
-    .card-title .idx { color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 700; }
-    label.lbl {
-      font-size: 10px; font-weight: 700; letter-spacing: .12em;
-      text-transform: uppercase; color: var(--muted);
-      display: flex; justify-content: space-between; align-items: baseline;
-    }
-    .val { font-size: 12px; color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: 0; }
-    .hint { font-size: 11px; color: var(--muted); font-weight: 500; letter-spacing: 0; text-transform: none; }
-
-    /* selects */
-    select {
-      appearance: none; -webkit-appearance: none;
-      width: 100%;
-      background-color: var(--panel-2);
-      color: var(--ink);
-      border: 1px solid rgba(20,19,13,.06);
-      border-radius: 12px;
-      padding: 11px 32px 11px 13px;
-      font-size: 13px; font-weight: 600;
-      cursor: pointer;
-      transition: border-color .15s ease, background-color .15s ease, box-shadow .15s ease;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2314130d' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right 13px center;
-      text-overflow: ellipsis; white-space: nowrap; overflow: hidden;
-    }
-    select:hover { border-color: var(--line); background-color: #f6f4ee; box-shadow: 0 2px 8px rgba(20,19,13,.06); }
-
-    /* segmented control — one inset track with a sliding-pill active state */
-    .seg {
-      display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px;
-      background: var(--panel-2);
-      padding: 3px; border-radius: 12px;
-      box-shadow: inset 0 1px 2px rgba(20,19,13,.05);
-    }
-    .seg button {
-      background: transparent;
-      color: var(--muted);
-      border: none;
-      border-radius: 9px;
-      padding: 9px 4px;
-      font-size: 11px; font-weight: 700;
-      cursor: pointer;
-      transition: color .15s ease, background .15s ease, box-shadow .15s ease;
-    }
-    .seg button:hover { color: var(--ink); background: rgba(20,19,13,.05); }
-    .seg button.active {
-      background: var(--ink); color: #fff;
-      box-shadow: 0 2px 6px rgba(20,19,13,.3);
-    }
-
-    /* range sliders — track fills to the thumb (progress), set via --fill in JS */
-    input[type=range] {
-      -webkit-appearance: none; appearance: none;
-      width: 100%; height: 6px; border-radius: 99px;
-      background: linear-gradient(to right, var(--ink) var(--fill, 0%), var(--line) var(--fill, 0%));
-      cursor: pointer; margin: 8px 0 4px;
-    }
-    input[type=range]::-webkit-slider-thumb {
-      -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%;
-      background: var(--ink); border: 3px solid var(--panel-2);
-      box-shadow: 0 1px 4px rgba(0,0,0,.3);
-      transition: transform .12s ease, box-shadow .2s ease;
-    }
-    input[type=range]:hover::-webkit-slider-thumb { transform: scale(1.12); }
-    input[type=range]:active::-webkit-slider-thumb {
-      transform: scale(1.06); box-shadow: 0 2px 8px rgba(0,0,0,.4);
-    }
-
-    /* pill toggles */
-    .toggle {
-      display: flex; align-items: center; justify-content: space-between;
-      cursor: pointer; gap: 12px;
-    }
-    .toggle span { font-size: 13px; font-weight: 600; }
-    input[type=checkbox] {
-      -webkit-appearance: none; appearance: none;
-      width: 44px; height: 26px; border-radius: 99px;
-      background: var(--line); position: relative; cursor: pointer;
-      transition: background .2s ease; flex-shrink: 0;
-      box-shadow: inset 0 1px 2px rgba(20,19,13,.12);
-    }
-    input[type=checkbox]::after {
-      content: ''; position: absolute; top: 3px; left: 3px;
-      width: 20px; height: 20px; border-radius: 50%; background: #fff;
-      box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform .2s ease;
-    }
-    input[type=checkbox]:checked { background: var(--ink); box-shadow: none; }
-    input[type=checkbox]:checked::after { transform: translateX(18px); }
-
-    /* transport — pinned to the bottom of the sidebar, clear primary/secondary
-       hierarchy: Start (accent) leads, Record (ink) follows once live. */
-    .transport {
-      flex-shrink: 0;
-      display: flex; flex-direction: column; gap: 10px;
-      padding-top: 14px; margin-top: 2px;
-      border-top: 1px solid var(--line);
-    }
-    .btn-row { display: grid; grid-template-columns: 1.25fr 1fr; gap: 10px; }
-    .btn {
-      display: flex; align-items: center; justify-content: center; gap: 9px;
-      height: 56px; border: none; border-radius: 16px; cursor: pointer;
-      font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
-      transition: transform .12s ease, box-shadow .2s ease, filter .2s ease;
-      box-shadow: 0 6px 16px rgba(20,19,13,.16);
-    }
-    .btn:hover { transform: translateY(-1px); box-shadow: 0 10px 24px rgba(20,19,13,.24); }
-    .btn:active { transform: scale(.98); }
-    .btn:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; transform: none; }
-    .btn .glyph { font-size: 19px; line-height: 1; }
-
-    .btn-start { background: var(--accent); color: var(--ink); }
-    .btn-start:hover { filter: brightness(1.04); }
-    .btn-rec   { background: var(--ink);    color: #fff; }
-    .btn-rec .glyph { color: var(--rec); }
-    .btn-rec.recording { background: var(--rec); color: #fff; }
-    .btn-rec.recording .glyph { color: #fff; }
-
-    .status {
-      display: flex; align-items: center; gap: 8px;
-      font-size: 12px; font-weight: 600; color: var(--muted);
-      background: var(--panel); border: 1px solid rgba(20,19,13,.06);
-      border-radius: 12px; padding: 10px 13px;
-    }
-    .status .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
-    .status .dot.live { background: #29b56a; box-shadow: 0 0 0 3px rgba(41,181,106,.18); }
-    .status .dot.rec  { background: var(--rec); animation: pulse 1s infinite; }
-    @keyframes pulse { 50% { opacity: .25; } }
-    .reset { background: none; border: none; color: var(--muted); font-size: 11px; font-weight: 600; cursor: pointer; text-decoration: underline; align-self: center; padding: 2px; }
-    .reset:hover { color: var(--ink); }
-
-    /* ---------- Stage — a dark screening room so the preview pops ---------- */
-    .stage {
-      flex: 1; min-width: 0; min-height: 0;
-      display: grid; grid-template: 1fr / 1fr; /* one cell */
-      place-items: center;
-      margin: 14px 14px 14px 0;
-      padding: 24px;
-      border-radius: 26px;
-      position: relative;
-      overflow: hidden;
-      background:
-        radial-gradient(120% 90% at 50% 0%, #26241b 0%, var(--stage) 62%);
-      box-shadow:
-        inset 0 1px 0 rgba(255,255,255,.05),
-        inset 0 0 0 1px rgba(255,255,255,.03),
-        0 18px 50px rgba(20,19,13,.18);
-    }
-    /* faint dot grid, like a studio pegboard */
-    .stage::before {
-      content: ''; position: absolute; inset: 0;
-      background-image: radial-gradient(rgba(255,255,255,.05) 1px, transparent 1.4px);
-      background-size: 22px 22px;
-      pointer-events: none;
-    }
-    .stage > * { grid-area: 1 / 1; } /* stack placeholder + preview in same cell */
-    .placeholder { text-align: center; color: #8f8c81; display: flex; flex-direction: column; align-items: center; gap: 26px; position: relative; }
-    .grille {
-      width: 190px; height: 190px; border-radius: 50%;
-      background-image: radial-gradient(rgba(242,197,0,.8) 22%, transparent 23%);
-      background-size: 14px 14px; background-position: center;
-      opacity: .8;
-      -webkit-mask-image: radial-gradient(circle at center, #000 62%, transparent 66%);
-              mask-image: radial-gradient(circle at center, #000 62%, transparent 66%);
-      animation: breathe 3.4s ease-in-out infinite;
-    }
-    @keyframes breathe { 50% { opacity: .4; transform: scale(.97); } }
-    .placeholder p { font-size: 14px; font-weight: 500; max-width: 280px; line-height: 1.5; }
-    .placeholder strong { color: var(--accent); }
-
-    /* preview + overlays — the wrap fills the whole stage cell and the canvas
-       grows to fill it while keeping its aspect ratio, so the preview tracks
-       the window as it resizes. */
-    .preview-wrap {
-      width: 100%; height: 100%;
-      min-width: 0; min-height: 0;
-      display: flex; align-items: center; justify-content: center;
-      line-height: 0;
-      position: relative;
-    }
-    /* shrink-wraps the canvas so the overlay badges anchor to the video edges */
-    .preview-frame {
-      position: relative;
-      display: flex; line-height: 0;
-      max-width: 100%; max-height: 100%;
-    }
-    #preview {
-      display: block;
-      max-width: 100%; max-height: 100%; width: auto; height: auto;
-      object-fit: contain;
-      border-radius: 14px;
-      box-shadow:
-        0 0 0 1px rgba(255,255,255,.08),
-        0 30px 80px rgba(0,0,0,.55);
-      background: #000;
-    }
-    .chip, .rec-badge {
-      position: absolute; top: 14px;
-      display: flex; align-items: center; gap: 7px;
-      padding: 7px 12px; border-radius: 99px;
-      font-size: 12px; font-weight: 700; letter-spacing: .02em;
-      line-height: 1;
-      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-      font-variant-numeric: tabular-nums;
-    }
-    .chip { left: 14px; background: rgba(20,19,13,.6); color: #fff; box-shadow: 0 0 0 1px rgba(255,255,255,.1); }
-    .rec-badge { right: 14px; background: rgba(229,72,77,.92); color: #fff; box-shadow: 0 4px 14px rgba(229,72,77,.4); }
-    .rec-dot { width: 9px; height: 9px; border-radius: 50%; background: #fff; animation: pulse 1s infinite; }
-  </style>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div class="drag-strip"></div>
-  <aside class="sidebar">
-    <div class="sidebar-head">
-      <div class="brand">Screen Recorder</div>
-      <h1>Incrust<span class="sub">Screen · Cam</span></h1>
+
+  <aside class="console">
+    <div class="console-head">
+      <div class="brand">INCRUST</div>
+      <button class="icon-btn" id="settingsBtn" aria-label="Devices" aria-expanded="false" aria-controls="settingsPopover">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="3.2" />
+          <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.11-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.56-1.11 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.08a1.7 1.7 0 0 0 1.03-1.56V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.03 1.56h.08a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.08a1.7 1.7 0 0 0 1.56 1.03H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.56 1.03z" />
+        </svg>
+      </button>
     </div>
 
-    <div class="sidebar-scroll">
-    <div class="card">
-      <div class="card-title"><span class="idx">01</span>Sources</div>
+    <h1 class="headline">Record<span class="sub">Screen</span></h1>
+
+    <div class="timer" id="bigTimer" aria-live="off">
+      <span class="timer-dot"></span>
+      <span class="digits"><span class="dim">00:</span>00:00</span>
+    </div>
+
+    <div class="meter" id="meter" aria-hidden="true"></div>
+
+    <div class="console-space"></div>
+
+    <div class="controls">
       <div>
-        <label class="lbl" for="camSelect">Webcam</label>
-        <select id="camSelect"></select>
+        <div class="ctl-label">FRAME</div>
+        <div class="seg" id="formatSeg">
+          <button data-fmt="match" class="active">Screen</button>
+          <button data-fmt="landscape">16:9</button>
+          <button data-fmt="portrait">9:16</button>
+          <button data-fmt="square">1:1</button>
+        </div>
       </div>
       <div>
-        <label class="lbl" for="micSelect">Microphone</label>
-        <select id="micSelect"></select>
+        <label class="ctl-label" for="zoomRange">ZOOM <span class="val" id="zoomVal">1.0×</span></label>
+        <input type="range" id="zoomRange" min="100" max="300" value="100" />
       </div>
+      <label class="toggle"><span>Follow cursor</span><input type="checkbox" id="followToggle" /></label>
     </div>
-
-    <div class="card">
-      <div class="card-title"><span class="idx">02</span>Framing</div>
-      <div class="seg" id="formatSeg">
-        <button data-fmt="match" class="active">Screen</button>
-        <button data-fmt="landscape">16:9</button>
-        <button data-fmt="portrait">9:16</button>
-        <button data-fmt="square">1:1</button>
-      </div>
-      <label class="lbl">Zoom <span class="val" id="zoomVal">1.0×</span></label>
-      <input type="range" id="zoomRange" min="100" max="300" value="100" />
-      <label class="toggle"><span>Auto-follow action</span><input type="checkbox" id="followToggle" /></label>
-      <div class="hint" id="cropHint">Tip: drag the preview background to choose which part of the screen to frame.</div>
-    </div>
-
-    <div class="card">
-      <div class="card-title"><span class="idx">03</span>Camera overlay <span class="hint" style="margin-left:auto;">drag on preview ✋</span></div>
-      <div class="seg" id="posSeg">
-        <button data-pos="bl" class="active">BL</button>
-        <button data-pos="br">BR</button>
-        <button data-pos="tl">TL</button>
-        <button data-pos="tr">TR</button>
-      </div>
-      <label class="lbl">Size <span class="val" id="sizeVal">28%</span></label>
-      <input type="range" id="sizeRange" min="12" max="55" value="28" />
-      <label class="lbl">Edge smoothing <span class="val" id="featherVal">3</span></label>
-      <input type="range" id="featherRange" min="0" max="12" value="3" />
-    </div>
-
-    <div class="card">
-      <div class="card-title"><span class="idx">04</span>Look</div>
-      <div>
-        <label class="lbl" for="effectSelect">Webcam effect</label>
-        <select id="effectSelect">
-          <option value="none">None</option>
-          <option value="bw">Black &amp; white</option>
-          <option value="sepia">Sepia</option>
-          <option value="vintage">Vintage</option>
-          <option value="cool">Cool</option>
-          <option value="warm">Warm</option>
-          <option value="invert">Invert</option>
-        </select>
-      </div>
-      <label class="toggle"><span>Mirror webcam</span><input type="checkbox" id="mirrorToggle" checked /></label>
-      <label class="toggle"><span>Soft drop shadow</span><input type="checkbox" id="shadowToggle" checked /></label>
-      <label class="toggle"><span>Remember settings</span><input type="checkbox" id="persistToggle" checked /></label>
-    </div>
-    </div><!-- /.sidebar-scroll -->
 
     <div class="transport">
-      <div class="status" id="status"><span class="dot"></span>Idle — press Start.</div>
-      <div class="btn-row">
-        <button class="btn btn-start" id="startBtn">
-          <span class="glyph" id="startGlyph">▶</span><span id="startLabel">Start</span>
-        </button>
-        <button class="btn btn-rec" id="recBtn" disabled>
-          <span class="glyph" id="recGlyph">●</span><span id="recLabel">Record</span>
-        </button>
-      </div>
-      <button class="reset" id="resetBtn">Reset settings</button>
+      <button class="tile-btn" id="startBtn">
+        <span class="disc"><span class="glyph" id="startGlyph">▶</span></span>
+        <span class="tile-name" id="startLabel">START</span>
+      </button>
+      <button class="tile-btn tile-rec" id="recBtn" disabled>
+        <span class="tile-dot"></span>
+        <span class="disc"><span class="glyph" id="recGlyph">●</span></span>
+        <span class="tile-name" id="recLabel">REC</span>
+        <span class="tile-hint">MP4</span>
+      </button>
     </div>
+
+    <div class="status" id="status"><span class="dot"></span>Idle — press Start.</div>
   </aside>
 
   <main class="stage">
     <div class="placeholder" id="placeholder">
       <div class="grille"></div>
-      <p>Press <strong>Start</strong> to pick a screen or window.<br />Your webcam is cut out and layered on top.</p>
+      <p>Press <strong>Start</strong> to pick a screen or window.<br />
+        Drag your bubble anywhere · scroll on it to resize.</p>
     </div>
     <div class="preview-wrap">
       <div class="preview-frame">
@@ -411,20 +78,37 @@
         <div class="rec-badge" id="recBadge" style="display:none;">
           <span class="rec-dot"></span>REC <span id="recTime">00:00</span>
         </div>
+        <div class="size-chip" id="sizeChip">28%</div>
       </div>
     </div>
   </main>
+
+  <div class="popover" id="settingsPopover" role="dialog" aria-label="Devices" hidden>
+    <div class="popover-title">DEVICES</div>
+    <div>
+      <label for="camSelect">WEBCAM</label>
+      <select id="camSelect"></select>
+    </div>
+    <div>
+      <label for="micSelect">MICROPHONE</label>
+      <select id="micSelect"></select>
+    </div>
+    <div class="hint">Device changes apply the next time you press Start.</div>
+    <div class="popover-foot">
+      <button class="reset" id="resetBtn">Reset settings</button>
+    </div>
+  </div>
 
   <!-- Mask refinement filter used by the compositor (app.js). Chain:
        1. blur softens the raw segmentation edge so the threshold can bite,
        2. feFuncA linear (slope 4, midpoint ~0.62) chokes the edge INWARD —
           removing the background halo — and hardens ghosty low-confidence alpha,
-       3. final blur re-feathers; its stdDeviation tracks the Edge smoothing slider. -->
+       3. final blur re-feathers the choked edge. -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <filter id="maskRefine" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
       <feGaussianBlur stdDeviation="3" />
       <feComponentTransfer><feFuncA type="linear" slope="4" intercept="-1.98" /></feComponentTransfer>
-      <feGaussianBlur id="maskFeather" stdDeviation="3" />
+      <feGaussianBlur stdDeviation="3" />
     </filter>
   </svg>
 
